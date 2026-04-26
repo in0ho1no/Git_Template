@@ -32,6 +32,8 @@
 *.ini    text eol=lf
 
 *.md     text eol=lf
+*.markdown text eol=lf
+*.mdx    text eol=lf
 *.txt    text eol=lf
 
 # シェルスクリプト（CRLF混入防止）
@@ -82,6 +84,11 @@ package-lock.json   text eol=lf
 *.tiff binary
 *.gif binary
 *.ico binary
+*.webp binary
+*.avif binary
+
+# テキストベース画像
+*.svg text eol=lf
 
 # 実行ファイル
 *.exe binary
@@ -136,6 +143,8 @@ out/**    linguist-generated
 ###############################################################################
 
 *.md linguist-documentation
+*.markdown linguist-documentation
+*.mdx linguist-documentation
 
 ###############################################################################
 # バイナリ扱いの明示（念のため）
