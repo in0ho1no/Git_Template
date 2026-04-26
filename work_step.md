@@ -38,10 +38,11 @@ git add --renormalize .
 
 ```text
 git-setup/
-├── check-setup.bat   # Git ローカル設定が期待値どおりか確認するスクリプト
+├── check-setup.bat   # Windows用Gitローカル設定が期待値どおりか確認するスクリプト
+├── check-setup.sh    # Mac用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── COMMIT_TEMPLATE   # コミットメッセージのテンプレート
-├── setup.bat         # Windows 用セットアップスクリプト
-└── setup.sh          # Mac 用セットアップスクリプト
+├── setup.bat         # Windows用セットアップスクリプト
+└── setup.sh          # Mac用セットアップスクリプト
 .gitattributes        # 改行コード・バイナリファイルの管理設定
 ```
 
