@@ -1,0 +1,24 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+	"settings": {
+		// ミニマップを非表示にする
+		"editor.minimap.enabled": false,
+		// カラーカスタマイズ
+		"workbench.colorCustomizations": {
+			"activityBar.background": "#e2df16b4",
+			"activityBar.foreground": "#06065df5",
+		},
+
+		// フォント設定
+		"editor.fontFamily": "Consolas, 'Meiryo UI','Courier New', monospace",
+
+		// VSCode標準のGit blame(行末に表示される最終コミット情報)を無効化
+		"git.blame.editorDecoration.enabled": false,
+		// GitLensのCurrent Line Blame(カーソル行に表示される履歴情報)を無効化
+		"gitlens.currentLine.enabled": false,
+	}
+}
