@@ -3,6 +3,7 @@ echo === Git ローカル設定の確認 ===
 echo.
 
 call :check "commit.template" "git-setup/COMMIT_TEMPLATE"
+call :check "core.hooksPath" "git-setup/hooks"
 call :check "fetch.prune" "true"
 call :check "pull.rebase" "false"
 call :check "merge.ff" "false"

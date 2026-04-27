@@ -33,6 +33,7 @@ check_optional() {
 }
 
 check "commit.template" "git-setup/COMMIT_TEMPLATE"
+check "core.hooksPath" "git-setup/hooks"
 check "fetch.prune" "true"
 check "pull.rebase" "false"
 check "merge.ff" "false"
