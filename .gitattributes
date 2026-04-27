@@ -53,6 +53,7 @@
 .gitmodules                    text eol=lf
 
 git-setup/COMMIT_TEMPLATE      text eol=lf
+git-setup/hooks/*              text eol=lf
 
 # よくある拡張子なしファイル
 Makefile                       text eol=lf

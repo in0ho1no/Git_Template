@@ -16,6 +16,17 @@ echo [設定] コミットテンプレート
 
 
 rem "---------------------------------------------------"
+rem "目的: リポジトリ管理のGit hooksを有効化する。"
+rem "概要: commit-msgなどの共通フックを全員で共有するため。"
+rem "---------------------------------------------------"
+git config --local core.hooksPath git-setup/hooks
+for /f "delims=" %%d in ('git rev-parse --git-common-dir') do set DEFAULT_HOOKS_DIR=%%d\hooks
+if not exist "%DEFAULT_HOOKS_DIR%" mkdir "%DEFAULT_HOOKS_DIR%"
+powershell -NoProfile -Command "@('このリポジトリでは setup により core.hooksPath を git-setup/hooks に設定しています。','標準の hooks ディレクトリ配下のフックは通常参照されません。','フックを追加・変更する場合は git-setup/hooks を編集してください。') | Set-Content -Path '%DEFAULT_HOOKS_DIR%\SETUP_CREATED_core.hooksPath_changed.txt' -Encoding utf8"
+echo [設定] core.hooksPath
+
+
+rem "---------------------------------------------------"
 rem "目的: fetch時にリモートで削除済みのブランチをローカルからも削除する。"
 rem "概要: ブランチの扱いで混乱が生じるのを避けるため。"
 rem "---------------------------------------------------"
