@@ -22,7 +22,7 @@ git config --local core.hooksPath git-setup/hooks
 chmod +x git-setup/hooks/commit-msg 2>/dev/null || true
 default_hooks_dir="$(git rev-parse --git-common-dir)/hooks"
 mkdir -p "$default_hooks_dir"
-cat > "$default_hooks_dir/README.core-hooksPath.txt" <<'EOF'
+cat > "$default_hooks_dir/SETUP_CREATED_core.hooksPath_changed.txt" <<'EOF'
 このリポジトリでは setup により core.hooksPath を git-setup/hooks に設定しています。
 標準の hooks ディレクトリ配下のフックは通常参照されません。
 フックを追加・変更する場合は git-setup/hooks を編集してください。

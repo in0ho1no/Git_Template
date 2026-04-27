@@ -22,7 +22,7 @@ rem "---------------------------------------------------"
 git config --local core.hooksPath git-setup/hooks
 for /f "delims=" %%d in ('git rev-parse --git-common-dir') do set DEFAULT_HOOKS_DIR=%%d\hooks
 if not exist "%DEFAULT_HOOKS_DIR%" mkdir "%DEFAULT_HOOKS_DIR%"
-powershell -NoProfile -Command "@('このリポジトリでは setup により core.hooksPath を git-setup/hooks に設定しています。','標準の hooks ディレクトリ配下のフックは通常参照されません。','フックを追加・変更する場合は git-setup/hooks を編集してください。') | Set-Content -Path '%DEFAULT_HOOKS_DIR%\README.core-hooksPath.txt' -Encoding utf8"
+powershell -NoProfile -Command "@('このリポジトリでは setup により core.hooksPath を git-setup/hooks に設定しています。','標準の hooks ディレクトリ配下のフックは通常参照されません。','フックを追加・変更する場合は git-setup/hooks を編集してください。') | Set-Content -Path '%DEFAULT_HOOKS_DIR%\SETUP_CREATED_core.hooksPath_changed.txt' -Encoding utf8"
 echo [設定] core.hooksPath
 
 
