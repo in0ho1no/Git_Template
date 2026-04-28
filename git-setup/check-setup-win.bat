@@ -5,7 +5,7 @@ echo.
 call :check "commit.template" "git-setup/COMMIT_TEMPLATE"
 call :check "core.hooksPath" "git-setup/hooks"
 call :check "fetch.prune" "true"
-call :check "pull.rebase" "false"
+call :check "pull.rebase" "true"
 call :check "merge.ff" "false"
 call :check "core.autocrlf" "false"
 call :check "core.safecrlf" "warn"

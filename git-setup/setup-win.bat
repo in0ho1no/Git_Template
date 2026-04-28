@@ -35,10 +35,10 @@ echo [設定] fetch.prune
 
 
 rem "---------------------------------------------------"
-rem "目的: git pull時にマージコミットを作成する。"
-rem "概要: 誰がいつ変更を取り込んだかを履歴に残すため。"
+rem "目的: git pull時にマージコミットを作成しない。"
+rem "概要: マージコミットが積みあがるのを避けるため。"
 rem "---------------------------------------------------"
-git config --local pull.rebase false
+git config --local pull.rebase true
 echo [設定] pull.rebase
 
 
