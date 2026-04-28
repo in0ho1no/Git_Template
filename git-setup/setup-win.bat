@@ -35,11 +35,19 @@ echo [設定] fetch.prune
 
 
 rem "---------------------------------------------------"
-rem "目的: git pull時にマージコミットを作成しない。"
-rem "概要: マージコミットが積みあがるのを避けるため。"
+rem "目的: pull.rebaseの設定を削除してデフォルト状態に戻す。"
+rem "概要: pull.ff=onlyと組み合わせて、fast-forward以外のpullを抑止するため。"
 rem "---------------------------------------------------"
-git config --local pull.rebase true
+git config --local --unset pull.rebase
 echo [設定] pull.rebase
+
+
+rem "---------------------------------------------------"
+rem "目的: git pull時にfast-forwardのみを許可する。"
+rem "概要: マージコミットの生成を防ぎ、履歴をシンプルに保つため。"
+rem "---------------------------------------------------"
+git config --local pull.ff only
+echo [設定] pull.ff
 
 
 rem "---------------------------------------------------"
