@@ -1,4 +1,7 @@
 {
     "recommendations": [
+        // git環境の推奨
+        "mhutchie.git-graph",  // gitの履歴をグラフで確認できる
+        "eamodio.gitlens"  // blame、差分参照、履歴追跡を強化する
     ]
 }
