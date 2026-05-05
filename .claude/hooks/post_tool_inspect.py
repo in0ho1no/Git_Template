@@ -65,7 +65,7 @@ SENSITIVE_DATA_PATTERNS = [
     (r"(?i)aws_secret_access_key\s*[:=]",                             "AWS secret key", False),
 ]
 
-_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
+_DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
 
 
 def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
@@ -75,12 +75,12 @@ def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
     ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
     line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
     try:
-        log_path = os.path.abspath(_LOG_FILE)
+        log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(line)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"[audit_log] write failed: {exc}", file=sys.stderr)
 
 
 def has_explanatory_context(text: str, start: int, end: int) -> bool:
