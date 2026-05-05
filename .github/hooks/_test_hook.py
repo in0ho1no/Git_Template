@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 
 os.environ["HOOK_NO_LOG"] = "1"  # Suppress audit log writes during tests
 
@@ -15,9 +16,17 @@ PRE_HOOK  = [sys.executable, ".github/hooks/pre_tool_inspect.py"]
 POST_HOOK = [sys.executable, ".github/hooks/post_tool_inspect.py"]
 
 
-def run(hook: list[str], payload: dict) -> tuple[int, str]:
-    result = subprocess.run(hook, input=json.dumps(payload), capture_output=True, text=True)
+def run(hook: list[str], payload: dict, extra_env: dict[str, str] | None = None) -> tuple[int, str]:
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+    result = subprocess.run(hook, input=json.dumps(payload), capture_output=True, text=True, env=env)
     return result.returncode, result.stderr.strip()
+
+
+def read_text(path: str) -> str:
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
 
 
 # Split to avoid triggering the hook's own credential-URL pattern when this file is written.
@@ -83,5 +92,63 @@ for desc, payload, expect_flagged in post_cases:
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {message}" if message else ""))
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    log_path = os.path.join(temp_dir, "audit.log")
+    code, message = run(
+        PRE_HOOK,
+        {"tool_name": "run_in_terminal", "tool_input": {"command": "GH_TOKEN=supersecret gh api /user"}},
+        {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": log_path},
+    )
+    log_text = read_text(log_path) if code == 0 else ""
+    passed = code == 0 and "cmd:gh" in log_text and "supersecret" not in log_text and "GH_TOKEN=" not in log_text
+    status = "OK" if passed else "FAIL"
+    if status == "FAIL":
+        ok = False
+    print(f"[{status}] pre: audit log summary" + (f" | {message}" if message else ""))
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    log_path = os.path.join(temp_dir, "audit.log")
+    code, message = run(
+        POST_HOOK,
+        {"tool_name": "read_file", "tool_response": {"content": "safe output should not be logged verbatim"}},
+        {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": log_path},
+    )
+    log_text = read_text(log_path) if code == 0 else ""
+    passed = code == 0 and "[POST]" in log_text and "safe output should not be logged verbatim" not in log_text
+    status = "OK" if passed else "FAIL"
+    if status == "FAIL":
+        ok = False
+    print(f"[{status}] post: audit log redaction" + (f" | {message}" if message else ""))
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    blocker = os.path.join(temp_dir, "blocked-parent")
+    with open(blocker, "w", encoding="utf-8") as fh:
+        fh.write("x")
+    code, message = run(
+        PRE_HOOK,
+        {"tool_name": "run_in_terminal", "tool_input": {"command": "echo hello"}},
+        {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": os.path.join(blocker, "audit.log")},
+    )
+    passed = code == 0 and "[audit_log] write failed:" in message
+    status = "OK" if passed else "FAIL"
+    if status == "FAIL":
+        ok = False
+    print(f"[{status}] pre: audit log write failure notice" + (f" | {message}" if message else ""))
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    blocker = os.path.join(temp_dir, "blocked-parent")
+    with open(blocker, "w", encoding="utf-8") as fh:
+        fh.write("x")
+    code, message = run(
+        POST_HOOK,
+        {"tool_name": "read_file", "tool_response": {"content": "safe output"}},
+        {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": os.path.join(blocker, "audit.log")},
+    )
+    passed = code == 0 and "[audit_log] write failed:" in message
+    status = "OK" if passed else "FAIL"
+    if status == "FAIL":
+        ok = False
+    print(f"[{status}] post: audit log write failure notice" + (f" | {message}" if message else ""))
 
 sys.exit(0 if ok else 1)
