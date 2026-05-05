@@ -57,6 +57,8 @@ post_cases = [
     # --- Sensitive data leakage detection ---
     ("post: placeholder password",{"tool_name": "read_file",       "tool_response": {"content": "password: changeme123"}}, False),
     ("post: placeholder api key", {"tool_name": "read_file",       "tool_response": {"content": "api_key = \"example_dummy_key_12345678901234567890\""}}, False),
+    ("post: placeholder test token", {"tool_name": "read_file",       "tool_response": {"content": "test_token=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"}}, False),
+    ("post: example text with real token", {"tool_name": "read_file",       "tool_response": {"content": "This example shows token=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"}}, True),
     ("post: long token",          {"tool_name": "read_file",       "tool_response": {"content": "token=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"}}, True),
     ("post: AWS access key",      {"tool_name": "run_in_terminal", "tool_response": {"output": "AKIAIOSFODNN7EXAMPLE found"}},  True),
     ("post: private key header",  {"tool_name": "read_file",       "tool_response": {"content": "-----BEGIN RSA PRIVATE KEY-----"}}, True),

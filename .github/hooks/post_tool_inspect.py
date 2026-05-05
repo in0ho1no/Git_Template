@@ -13,7 +13,6 @@ from typing import Any
 
 EXPLANATORY_CONTEXT_PATTERNS = [
     r"\bfor example\b",
-    r"\bexample\b",
     r"\bquoted?\b",
     r"これは例",
     r"例です",
@@ -28,10 +27,10 @@ EXPLANATORY_CONTEXT_PATTERNS = [
 ]
 
 SECRET_PLACEHOLDER_PATTERNS = [
-    r"example",
+    r"\bexample[_ -]?(?:key|token|secret)\b",
     r"sample",
     r"dummy",
-    r"test(?:ing)?",
+    r"\btest[_ -]?(?:key|token|secret|password)\b",
     r"fake",
     r"placeholder",
     r"changeme",
