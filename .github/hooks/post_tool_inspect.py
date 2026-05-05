@@ -27,6 +27,22 @@ EXPLANATORY_CONTEXT_PATTERNS = [
     r"指示文",
 ]
 
+SECRET_PLACEHOLDER_PATTERNS = [
+    r"example",
+    r"sample",
+    r"dummy",
+    r"test(?:ing)?",
+    r"fake",
+    r"placeholder",
+    r"changeme",
+    r"default",
+    r"replace(?:[_ -]?me)?",
+    r"redacted",
+    r"\byour[_ -]?(?:api[_-]?key|token|secret|password)\b",
+    r"例です",
+    r"サンプル",
+]
+
 INJECTION_PATTERNS = [
     (r"ignore\s+(previous|above|prior)\s+instructions?",               "instruction override"),
     (r"上記の指示は?無視",                                               "instruction override (ja)"),
@@ -39,13 +55,14 @@ INJECTION_PATTERNS = [
 ]
 
 SENSITIVE_DATA_PATTERNS = [
-    (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?[A-Za-z0-9\-_]{20,}", "API key"),
-    (r"(?i)(secret|token|password|passwd)\s*[:=]\s*['\"]?[A-Za-z0-9\-_+/]{8,}['\"]?", "secret/token"),
-    (r"sk-[A-Za-z0-9]{20,}",                                          "OpenAI-style key"),
-    (r"AKIA[0-9A-Z]{16}",                                             "AWS access key"),
-    (r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",                   "private key"),
-    (r"(?i)anthropic[_-]api[_-]key\s*[:=]",                           "Anthropic API key"),
-    (r"(?i)aws_secret_access_key\s*[:=]",                             "AWS secret key"),
+    (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?[A-Za-z0-9\-_+/]{24,}['\"]?", "API key", True),
+    (r"(?i)(secret|token)\s*[:=]\s*['\"]?[A-Za-z0-9\-_+/]{20,}['\"]?", "secret/token", True),
+    (r"(?i)(password|passwd)\s*[:=]\s*['\"]?[^\s'\"\\]{16,}['\"]?", "password", True),
+    (r"sk-[A-Za-z0-9]{40,}",                                          "OpenAI-style key", False),
+    (r"AKIA[0-9A-Z]{16}",                                             "AWS access key", False),
+    (r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",                   "private key", False),
+    (r"(?i)anthropic[_-]api[_-]key\s*[:=]",                           "Anthropic API key", False),
+    (r"(?i)aws_secret_access_key\s*[:=]",                             "AWS secret key", False),
 ]
 
 
@@ -65,6 +82,13 @@ def has_explanatory_context(text: str, start: int, end: int) -> bool:
         return True
 
     return any(re.search(pattern, window, flags=re.IGNORECASE) for pattern in EXPLANATORY_CONTEXT_PATTERNS)
+
+
+def has_secret_placeholder_context(text: str, start: int, end: int) -> bool:
+    window_start = max(0, start - 80)
+    window_end = min(len(text), end + 80)
+    window = text[window_start:window_end]
+    return any(re.search(pattern, window, flags=re.IGNORECASE) for pattern in SECRET_PLACEHOLDER_PATTERNS)
 
 
 def extract_text(value: Any) -> str:
@@ -112,8 +136,10 @@ def main() -> None:
                 continue
             warn(f"potential injection in {tool_name} output [{label}]")
 
-    for pat, label in SENSITIVE_DATA_PATTERNS:
-        if re.search(pat, output):
+    for pat, label, allow_placeholder_skip in SENSITIVE_DATA_PATTERNS:
+        for match in re.finditer(pat, output):
+            if allow_placeholder_skip and has_secret_placeholder_context(output, match.start(), match.end()):
+                continue
             warn(f"potential {label} in {tool_name} output")
 
     sys.exit(0)
