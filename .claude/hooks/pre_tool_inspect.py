@@ -7,8 +7,10 @@ prompt-injection-style content. Exit 2 to block (stderr -> Claude).
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+from datetime import datetime, timezone
 
 
 SHELL_TOOLS = ("Bash", "PowerShell", "Shell")
@@ -35,10 +37,22 @@ SECRET_URL_PATTERNS = [
     r"https?://[^\s/'\":]+:[^\s/@'\"]+@",
 ]
 
+_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
 
-def block(reason: str) -> None:
-    print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
-    sys.exit(2)
+
+def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
+    """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
+    if os.environ.get("HOOK_NO_LOG"):
+        return
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
+    try:
+        log_path = os.path.abspath(_LOG_FILE)
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError:
+        pass
 
 
 def normalize_path(value: str) -> str:
@@ -55,6 +69,11 @@ def main() -> None:
 
     tool: str = data.get("tool_name", "")
     inp: dict = data.get("tool_input", {}) or {}
+
+    def block(reason: str) -> None:
+        audit_log("PRE", tool, "BLOCKED", reason)
+        print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
+        sys.exit(2)
 
     # ---- Shell command checks -------------------------------------------
     if tool in SHELL_TOOLS:
@@ -111,6 +130,14 @@ def main() -> None:
             if re.search(pat, content, flags=re.IGNORECASE):
                 block("suspicious URL with credential-like data in output")
 
+    # ---- Audit log for allowed operations -------------------------------
+    if tool in SHELL_TOOLS:
+        detail = (inp.get("command", "") or "")[:80]
+    elif tool in ("Read", "Edit", "Write"):
+        detail = inp.get("file_path") or inp.get("path") or ""
+    else:
+        detail = ""
+    audit_log("PRE", tool, "ALLOWED", detail)
     sys.exit(0)
 
 

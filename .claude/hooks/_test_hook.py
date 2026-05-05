@@ -5,8 +5,11 @@ This script only passes JSON strings to the hooks for regex inspection.
 No actual commands are executed.
 """
 import json
+import os
 import subprocess
 import sys
+
+os.environ["HOOK_NO_LOG"] = "1"  # Suppress audit log writes during tests
 
 PRE_HOOK  = [sys.executable, ".claude/hooks/pre_tool_inspect.py"]
 POST_HOOK = [sys.executable, ".claude/hooks/post_tool_inspect.py"]
