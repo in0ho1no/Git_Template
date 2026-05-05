@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python .github/hooks/pre_tool_inspect.py",
+        "windows": "python .github\\hooks\\pre_tool_inspect.py",
+        "timeout": 15
+      }
+    ]
+  }
+}
