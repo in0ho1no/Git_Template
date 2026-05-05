@@ -29,6 +29,9 @@ def read_text(path: str) -> str:
 
 # Split to avoid triggering the hook's own credential-URL pattern when this file is written.
 _cred_url = "https://example.com?" + "token=abc"
+# Construct invisible chars via chr() to avoid embedding them literally in this file.
+_zwsp   = chr(0x200B)   # zero-width space
+_rlo    = chr(0x202E)   # right-to-left override (most dangerous bidi char)
 
 pre_cases = [
     # (description, payload, expect_blocked)
@@ -46,6 +49,10 @@ pre_cases = [
     ("pre: Remove-Item rf",       {"tool_name": "PowerShell", "tool_input": {"command": "Remove-Item -Recurse -Force C:/testdir"}}, True),
     ("pre: read .env",            {"tool_name": "Read",       "tool_input": {"file_path": "C:/project/.env"}},                     True),
     ("pre: write cred URL",       {"tool_name": "Write",      "tool_input": {"file_path": "out.py", "content": _cred_url}},        True),
+    # --- Glassworm: invisible Unicode char detection ---
+    ("pre: invisible in command",  {"tool_name": "Bash",  "tool_input": {"command": f"echo{_zwsp}hello"}},                           True),
+    ("pre: bidi override in cmd",  {"tool_name": "Bash",  "tool_input": {"command": f"echo {_rlo}hello"}},                           True),
+    ("pre: invisible in content",  {"tool_name": "Write", "tool_input": {"file_path": "out.py", "content": f"code{_zwsp}here"}},     True),
 ]
 
 post_cases = [
@@ -71,6 +78,9 @@ post_cases = [
     ("post: long token",           {"tool_name": "Read",  "tool_response": {"content": "token=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"}}, True),
     ("post: AWS access key",       {"tool_name": "Bash",  "tool_response": {"output": "AKIAIOSFODNN7EXAMPLE found"}},              True),
     ("post: private key header",   {"tool_name": "Read",  "tool_response": {"content": "-----BEGIN RSA PRIVATE KEY-----"}},        True),
+    # --- Glassworm: invisible Unicode char detection ---
+    ("post: invisible in output",  {"tool_name": "Read",  "tool_response": {"content": f"normal{_zwsp}text"}},                       True),
+    ("post: bidi override output", {"tool_name": "Bash",  "tool_response": {"output":  f"result {_rlo} value"}},                     True),
 ]
 
 ok = True

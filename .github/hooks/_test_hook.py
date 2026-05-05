@@ -32,6 +32,9 @@ def read_text(path: str) -> str:
 # Split to avoid triggering the hook's own credential-URL pattern when this file is written.
 _cred_url   = "https://example.com?" + "token=abc"
 _basic_auth = "https://${USER}:${PASS}" + "@example.com/private"
+# Construct invisible chars via chr() to avoid embedding them literally in this file.
+_zwsp = chr(0x200B)   # zero-width space
+_rlo  = chr(0x202E)   # right-to-left override
 
 pre_cases = [
     # (description, payload, expect_blocked)
@@ -49,6 +52,10 @@ pre_cases = [
     ("pre: powershell remove",    {"tool_name": "run_in_terminal",        "tool_input": {"command": "Remove-Item -Recurse -Force C:/testdir"}}, True),
     ("pre: cmd del order 1",      {"tool_name": "run_in_terminal",        "tool_input": {"command": "del /s /q testdir"}},             True),
     ("pre: cmd del order 2",      {"tool_name": "run_in_terminal",        "tool_input": {"command": "del /q /s testdir"}},             True),
+    # --- Glassworm: invisible Unicode char detection ---
+    ("pre: invisible in command",  {"tool_name": "run_in_terminal", "tool_input": {"command": f"echo{_zwsp}hello"}},                    True),
+    ("pre: bidi override in cmd",  {"tool_name": "run_in_terminal", "tool_input": {"command": f"echo {_rlo}hello"}},                    True),
+    ("pre: invisible in content",  {"tool_name": "create_file",     "tool_input": {"filePath": "out.py", "content": f"code{_zwsp}here"}}, True),
 ]
 
 post_cases = [
@@ -74,6 +81,9 @@ post_cases = [
     ("post: long token",          {"tool_name": "read_file",       "tool_response": {"content": "token=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"}}, True),
     ("post: AWS access key",      {"tool_name": "run_in_terminal", "tool_response": {"output": "AKIAIOSFODNN7EXAMPLE found"}},  True),
     ("post: private key header",  {"tool_name": "read_file",       "tool_response": {"content": "-----BEGIN RSA PRIVATE KEY-----"}}, True),
+    # --- Glassworm: invisible Unicode char detection ---
+    ("post: invisible in output",  {"tool_name": "read_file",       "tool_response": {"content": f"normal{_zwsp}text"}},                True),
+    ("post: bidi override output", {"tool_name": "run_in_terminal", "tool_response": {"output":  f"result {_rlo} value"}},              True),
 ]
 
 ok = True

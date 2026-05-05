@@ -70,6 +70,19 @@ SHELL_DANGEROUS_PATTERNS = [
 ]
 
 
+# Glassworm: invisible/bidi-override Unicode chars that can hide malicious content.
+# Built via chr() to avoid embedding actual invisible chars in this source file.
+_INVISIBLE_CODEPOINTS = (
+    [0x00AD]                        # soft hyphen
+    + list(range(0x200B, 0x2010))   # ZWSP, ZWNJ, ZWJ, LRM, RLM
+    + list(range(0x202A, 0x202F))   # LRE, RLE, PDF, LRO, RLO (bidi overrides)
+    + list(range(0x2060, 0x2065))   # word joiner, invisible operators
+    + [0xFEFF]                      # BOM / ZWNBSP
+)
+INVISIBLE_CHAR_RE = re.compile(
+    "[" + "".join(chr(cp) for cp in _INVISIBLE_CODEPOINTS) + "]"
+)
+
 _DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
 
 
@@ -171,6 +184,9 @@ def main() -> None:
         if not shell_commands:
             shell_commands = list(iter_strings(tool_input))
         for command in shell_commands:
+            if INVISIBLE_CHAR_RE.search(command):
+                chars = ", ".join(sorted({f"U+{ord(c):04X}" for c in INVISIBLE_CHAR_RE.findall(command)}))
+                block(f"invisible Unicode chars in command ({chars})")
             normalized_command = normalize_path(command)
             for pattern, label in SHELL_DANGEROUS_PATTERNS:
                 if re.search(pattern, normalized_command, flags=re.IGNORECASE):
@@ -194,6 +210,9 @@ def main() -> None:
         for pattern in SECRET_URL_PATTERNS:
             if re.search(pattern, content, flags=re.IGNORECASE):
                 block("suspicious URL with credential-like data in output")
+        if INVISIBLE_CHAR_RE.search(content):
+            chars = ", ".join(sorted({f"U+{ord(c):04X}" for c in INVISIBLE_CHAR_RE.findall(content)}))
+            block(f"invisible Unicode chars in written content ({chars})")
 
     # ---- Audit log for allowed operations -------------------------------
     cmd_vals = collect_keyed_strings(tool_input, {"command"})
