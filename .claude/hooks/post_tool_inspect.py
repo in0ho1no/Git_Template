@@ -10,6 +10,22 @@ import json
 import re
 import sys
 
+EXPLANATORY_CONTEXT_PATTERNS = [
+    r"\bfor example\b",
+    r"\bexample\b",
+    r"\bquoted?\b",
+    r"これは例",
+    r"例です",
+    r"例えば",
+    r"たとえば",
+    r"インジェクション",
+    r"prompt[- ]?injection",
+    r"検知",
+    r"報告",
+    r"フォーマット",
+    r"指示文",
+]
+
 INJECTION_PATTERNS = [
     (r"ignore\s+(previous|above|prior)\s+instructions?",               "instruction override"),
     (r"上記の指示は?無視",                                               "instruction override (ja)"),
@@ -35,6 +51,19 @@ SENSITIVE_DATA_PATTERNS = [
 def warn(reason: str) -> None:
     print(f"WARNING by post_tool_inspect.py: {reason}", file=sys.stderr)
     sys.exit(2)
+
+
+def has_explanatory_context(text: str, start: int, end: int) -> bool:
+    window_start = max(0, start - 80)
+    window_end = min(len(text), end + 80)
+    window = text[window_start:window_end]
+    prefix = text[max(0, start - 10):start]
+    suffix = text[end:min(len(text), end + 20)]
+
+    if ("「" in prefix and "」" in suffix) or ('"' in prefix and '"' in suffix):
+        return True
+
+    return any(re.search(pattern, window, flags=re.IGNORECASE) for pattern in EXPLANATORY_CONTEXT_PATTERNS)
 
 
 def extract_text(value: object) -> str:
@@ -71,7 +100,9 @@ def main() -> None:
         sys.exit(0)
 
     for pat, label in INJECTION_PATTERNS:
-        if re.search(pat, output, flags=re.IGNORECASE):
+        for match in re.finditer(pat, output, flags=re.IGNORECASE):
+            if has_explanatory_context(output, match.start(), match.end()):
+                continue
             warn(f"potential injection in {tool} output [{label}]")
 
     for pat, label in SENSITIVE_DATA_PATTERNS:
