@@ -36,6 +36,20 @@ SECRET_URL_PATTERNS = [
     r"https?://[^\s'\"]*[?#][^\s'\"]*(token|secret|api[-_]?key|password|credential)\s*=",
     r"https?://[^\s/'\":]+:[^\s/@'\"]+@",
 ]
+# Glassworm: invisible/bidi control chars that can hide malicious content.
+# Built via chr() to avoid embedding actual invisible chars in this source file.
+_INVISIBLE_CODEPOINTS = (
+    [0x061C]                        # Arabic Letter Mark
+    + [0x00AD]                      # soft hyphen
+    + list(range(0x200B, 0x2010))   # ZWSP, ZWNJ, ZWJ, LRM, RLM
+    + list(range(0x202A, 0x202F))   # LRE, RLE, PDF, LRO, RLO (bidi overrides)
+    + list(range(0x2060, 0x2065))   # word joiner, invisible operators
+    + list(range(0x2066, 0x206A))   # LRI, RLI, FSI, PDI (bidi isolates)
+    + [0xFEFF]                      # BOM / ZWNBSP
+)
+INVISIBLE_CHAR_RE = re.compile(
+    "[" + "".join(chr(cp) for cp in _INVISIBLE_CODEPOINTS) + "]"
+)
 
 _DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
 
@@ -83,6 +97,11 @@ def normalize_path(value: str) -> str:
     return value.replace("\\", "/")
 
 
+def _invisible_chars_desc(text: str) -> str:
+    found = sorted({f"U+{ord(c):04X}" for c in INVISIBLE_CHAR_RE.findall(text)})
+    return ", ".join(found)
+
+
 def main() -> None:
     try:
         data = json.load(sys.stdin)
@@ -96,13 +115,16 @@ def main() -> None:
 
     def block(reason: str) -> None:
         audit_log("PRE", tool, "BLOCKED", reason)
-        print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
+        print(f"BLOCKED: {reason}. Remove suspicious content and retry.", file=sys.stderr)
         sys.exit(2)
 
     # ---- Shell command checks -------------------------------------------
     if tool in SHELL_TOOLS:
         cmd: str = inp.get("command", "") or ""
         normalized_cmd = normalize_path(cmd)
+
+        if INVISIBLE_CHAR_RE.search(cmd):
+            block(f"invisible Unicode chars in command ({_invisible_chars_desc(cmd)})")
 
         dangerous = [
             (r"\brm\s+-rf?\s+(/|~|\$HOME|\*)", "rm -rf against root/home/wildcard"),
@@ -142,7 +164,7 @@ def main() -> None:
             if re.search(pat, normalized_path, flags=re.IGNORECASE):
                 block(f"sensitive file access: {path!r}")
 
-    # ---- Content checks for Write/Edit (exfiltration patterns) ----------
+    # ---- Content checks for Write/Edit (exfiltration + invisible chars) -
     if tool in ("Write", "Edit"):
         content = (
             inp.get("content")
@@ -153,6 +175,8 @@ def main() -> None:
         for pat in SECRET_URL_PATTERNS:
             if re.search(pat, content, flags=re.IGNORECASE):
                 block("suspicious URL with credential-like data in output")
+        if INVISIBLE_CHAR_RE.search(content):
+            block(f"invisible Unicode chars in written content ({_invisible_chars_desc(content)})")
 
     # ---- Audit log for allowed operations -------------------------------
     if tool in SHELL_TOOLS:
