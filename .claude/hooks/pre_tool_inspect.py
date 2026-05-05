@@ -11,9 +11,38 @@ import re
 import sys
 
 
+SHELL_TOOLS = ("Bash", "PowerShell", "Shell")
+SENSITIVE_PATH_PATTERNS = [
+    r"(^|/)\.env($|\.|/)",
+    r"(^|/)\.ssh/",
+    r"(^|/)\.aws/",
+    r"(^|/)\.gnupg/",
+    r"\.pem$",
+    r"\.key$",
+    r"(^|/)id_rsa($|\.pub$)",
+    r"(^|/)id_ed25519($|\.pub$)",
+    r"(^|/)credentials(\.json|\.yaml|\.yml)?$",
+]
+SECRET_PATH_PATTERN = (
+    r"(\.env(\.|$|\s|/)"
+    r"|/\.ssh/|/\.aws/|/\.gnupg/"
+    r"|\.pem(\s|$)|\.key(\s|$)"
+    r"|id_rsa(\s|$|\.pub)|id_ed25519(\s|$|\.pub)"
+    r"|credentials(\.|$|\s))"
+)
+SECRET_URL_PATTERNS = [
+    r"https?://[^\s'\"]*[?#][^\s'\"]*(token|secret|api[-_]?key|password|credential)\s*=",
+    r"https?://[^\s/'\":]+:[^\s/@'\"]+@",
+]
+
+
 def block(reason: str) -> None:
     print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
     sys.exit(2)
+
+
+def normalize_path(value: str) -> str:
+    return value.replace("\\", "/")
 
 
 def main() -> None:
@@ -27,9 +56,10 @@ def main() -> None:
     tool: str = data.get("tool_name", "")
     inp: dict = data.get("tool_input", {}) or {}
 
-    # ---- Bash command checks --------------------------------------------
-    if tool == "Bash":
+    # ---- Shell command checks -------------------------------------------
+    if tool in SHELL_TOOLS:
         cmd: str = inp.get("command", "") or ""
+        normalized_cmd = normalize_path(cmd)
 
         dangerous = [
             (r"\brm\s+-rf?\s+(/|~|\$HOME|\*)", "rm -rf against root/home/wildcard"),
@@ -42,39 +72,31 @@ def main() -> None:
             (r":\(\)\s*\{.*:\|:&.*\}",         "fork bomb pattern"),
             (r"\bdd\s+[^|]*\bof=/dev/",        "dd writing to device"),
             (r">\s*/dev/sd[a-z]",              "raw disk write"),
+            (
+                r"\bremove-item\b(?=[^\n\r]*\s-(recurse|r)\b)"
+                r"(?=[^\n\r]*\s-(force|fo)\b)[^\n\r]*(?:[a-z]:/|/|~|\$HOME|\*)",
+                "powershell recursive force remove",
+            ),
+            (r"\b(del|erase)\b[^\n\r]*\s/s\b[^\n\r]*\s/q\b", "cmd recursive quiet delete"),
+            (r"\brmdir\b[^\n\r]*\s/s\b[^\n\r]*\s/q\b", "cmd recursive quiet directory delete"),
         ]
         for pat, label in dangerous:
-            if re.search(pat, cmd):
+            if re.search(pat, normalized_cmd, flags=re.IGNORECASE):
                 block(f"{label}: {cmd!r}")
 
-        # Bash-level reads of secrets that bypass Read() deny rules.
-        secret_path = (
-            r"(\.env(\.|$|\s|/)"
-            r"|/\.ssh/|/\.aws/|/\.gnupg/"
-            r"|\.pem(\s|$)|\.key(\s|$)"
-            r"|id_rsa(\s|$|\.pub)|id_ed25519(\s|$|\.pub)"
-            r"|credentials(\.|$|\s))"
+        readers = (
+            r"\b(cat|less|more|head|tail|cp|mv|grep|awk|sed|od|xxd|base64|tar|zip|"
+            r"get-content|gc|type|copy-item|move-item)\b"
         )
-        readers = r"\b(cat|less|more|head|tail|cp|mv|grep|awk|sed|od|xxd|base64|tar|zip)\b"
-        if re.search(readers + r"[^|;&]*" + secret_path, cmd):
+        if re.search(readers + r"[^|;&]*" + SECRET_PATH_PATTERN, normalized_cmd, flags=re.IGNORECASE):
             block(f"shell access to secret-like path: {cmd!r}")
 
     # ---- File-path checks (defense in depth for Read/Edit/Write) --------
     if tool in ("Read", "Edit", "Write"):
         path: str = inp.get("file_path") or inp.get("path") or ""
-        sensitive = [
-            r"(^|/)\.env($|\.|/)",
-            r"(^|/)\.ssh/",
-            r"(^|/)\.aws/",
-            r"(^|/)\.gnupg/",
-            r"\.pem$",
-            r"\.key$",
-            r"(^|/)id_rsa($|\.pub$)",
-            r"(^|/)id_ed25519($|\.pub$)",
-            r"(^|/)credentials(\.json|\.yaml|\.yml)?$",
-        ]
-        for pat in sensitive:
-            if re.search(pat, path):
+        normalized_path = normalize_path(path)
+        for pat in SENSITIVE_PATH_PATTERNS:
+            if re.search(pat, normalized_path, flags=re.IGNORECASE):
                 block(f"sensitive file access: {path!r}")
 
     # ---- Content checks for Write/Edit (exfiltration patterns) ----------
@@ -85,14 +107,9 @@ def main() -> None:
             or inp.get("new_content")
             or ""
         )
-        # URL with credential-looking query params being embedded in code.
-        if re.search(
-            r"https?://[^\s'\"]+\?[^\s'\"]*=[^\s'\"]*"
-            r"(token|secret|api[-_]?key|password|credential)",
-            content,
-            flags=re.IGNORECASE,
-        ):
-            block("suspicious URL with credential-like query parameter in output")
+        for pat in SECRET_URL_PATTERNS:
+            if re.search(pat, content, flags=re.IGNORECASE):
+                block("suspicious URL with credential-like data in output")
 
     sys.exit(0)
 
