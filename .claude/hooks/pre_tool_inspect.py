@@ -77,8 +77,8 @@ def main() -> None:
                 r"(?=[^\n\r]*\s-(force|fo)\b)[^\n\r]*(?:[a-z]:/|/|~|\$HOME|\*)",
                 "powershell recursive force remove",
             ),
-            (r"\b(del|erase)\b[^\n\r]*\s/s\b[^\n\r]*\s/q\b", "cmd recursive quiet delete"),
-            (r"\brmdir\b[^\n\r]*\s/s\b[^\n\r]*\s/q\b", "cmd recursive quiet directory delete"),
+            (r"\b(del|erase)\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)", "cmd recursive quiet delete"),
+            (r"\brmdir\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)", "cmd recursive quiet directory delete"),
         ]
         for pat, label in dangerous:
             if re.search(pat, normalized_cmd, flags=re.IGNORECASE):
