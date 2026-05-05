@@ -71,12 +71,18 @@ def extract_text(value: object) -> str:
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
-        for key in ("output", "content", "result", "text", "stdout"):
-            val = value.get(key, "")
-            if isinstance(val, str) and val:
-                return val
         parts = []
-        for val in value.values():
+        seen_keys = set()
+        for key in ("output", "content", "result", "text", "stdout"):
+            if key not in value:
+                continue
+            text = extract_text(value[key])
+            if text:
+                parts.append(text)
+            seen_keys.add(key)
+        for key, val in value.items():
+            if key in seen_keys:
+                continue
             text = extract_text(val)
             if text:
                 parts.append(text)
