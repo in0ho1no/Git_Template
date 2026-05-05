@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "python .github/hooks/post_tool_inspect.py",
+        "windows": "python .github\\hooks\\post_tool_inspect.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

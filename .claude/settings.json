@@ -89,6 +89,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Shell|Read|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/post_tool_inspect.py"
+          }
+        ]
+      }
     ]
   }
 }
