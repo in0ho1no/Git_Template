@@ -15,6 +15,7 @@ def run(payload: dict) -> tuple[int, str]:
     return r.returncode, r.stderr.strip()
 
 # Build the credential URL dynamically so the hook doesn't block this file itself.
+# Split to avoid triggering the hook's own credential-URL pattern when this file is written.
 _cred_url = "https://example.com?" + "token=abc"
 
 cases = [
