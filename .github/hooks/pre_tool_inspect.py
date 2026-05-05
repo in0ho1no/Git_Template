@@ -7,8 +7,10 @@ patterns. Exit 2 to block (stderr -> model).
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 
@@ -68,9 +70,46 @@ SHELL_DANGEROUS_PATTERNS = [
 ]
 
 
-def block(reason: str) -> None:
-    print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
-    sys.exit(2)
+_DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
+
+
+def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
+    """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
+    if os.environ.get("HOOK_NO_LOG"):
+        return
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
+    try:
+        log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError as exc:
+        print(f"[audit_log] write failed: {exc}", file=sys.stderr)
+
+
+def summarize_path(path: str) -> str:
+    normalized = normalize_path(path).strip()
+    if not normalized:
+        return ""
+    parts = [part for part in normalized.split("/") if part and part != "."]
+    if len(parts) >= 2:
+        return "/".join(parts[-2:])
+    return normalized
+
+
+def summarize_command(command: str) -> str:
+    tokens = re.findall(r'"[^"]*"|\'[^\']*\'|\S+', command)
+    for token in tokens:
+        cleaned = token.strip().strip("\"'")
+        if not cleaned:
+            continue
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", cleaned):
+            continue
+        if cleaned.lower() in {"sudo", "env", "/usr/bin/env", "command", "time"}:
+            continue
+        return os.path.basename(normalize_path(cleaned))
+    return "shell"
 
 
 def normalize_path(value: str) -> str:
@@ -122,6 +161,11 @@ def main() -> None:
     tool_name = data.get("tool_name", "") or ""
     tool_input = data.get("tool_input", {}) or {}
 
+    def block(reason: str) -> None:
+        audit_log("PRE", tool_name, "BLOCKED", reason)
+        print(f"BLOCKED by pre_tool_inspect.py: {reason}", file=sys.stderr)
+        sys.exit(2)
+
     if looks_like_shell_tool(tool_name, tool_input):
         shell_commands = collect_keyed_strings(tool_input, {"command"})
         if not shell_commands:
@@ -151,6 +195,16 @@ def main() -> None:
             if re.search(pattern, content, flags=re.IGNORECASE):
                 block("suspicious URL with credential-like data in output")
 
+    # ---- Audit log for allowed operations -------------------------------
+    cmd_vals = collect_keyed_strings(tool_input, {"command"})
+    path_vals = collect_keyed_strings(tool_input, PATH_KEY_HINTS)
+    if cmd_vals:
+        detail = f"cmd:{summarize_command(cmd_vals[0])}"
+    elif path_vals:
+        detail = f"path:{summarize_path(path_vals[0])}"
+    else:
+        detail = ""
+    audit_log("PRE", tool_name, "ALLOWED", detail)
     sys.exit(0)
 
 

@@ -7,8 +7,10 @@ Exit 2 to surface a warning to Claude (cannot undo the completed tool action).
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+from datetime import datetime, timezone
 
 EXPLANATORY_CONTEXT_PATTERNS = [
     r"\bfor example\b",
@@ -63,10 +65,22 @@ SENSITIVE_DATA_PATTERNS = [
     (r"(?i)aws_secret_access_key\s*[:=]",                             "AWS secret key", False),
 ]
 
+_DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
 
-def warn(reason: str) -> None:
-    print(f"WARNING by post_tool_inspect.py: {reason}", file=sys.stderr)
-    sys.exit(2)
+
+def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
+    """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
+    if os.environ.get("HOOK_NO_LOG"):
+        return
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
+    try:
+        log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError as exc:
+        print(f"[audit_log] write failed: {exc}", file=sys.stderr)
 
 
 def has_explanatory_context(text: str, start: int, end: int) -> bool:
@@ -95,7 +109,7 @@ def extract_text(value: object) -> str:
         return value
     if isinstance(value, dict):
         parts = []
-        seen_keys = set()
+        seen_keys: set[str] = set()
         for key in ("output", "content", "result", "text", "stdout"):
             if key not in value:
                 continue
@@ -128,6 +142,11 @@ def main() -> None:
     if not output:
         sys.exit(0)
 
+    def warn(reason: str) -> None:
+        audit_log("POST", tool, "WARNING", reason)
+        print(f"WARNING by post_tool_inspect.py: {reason}", file=sys.stderr)
+        sys.exit(2)
+
     for pat, label in INJECTION_PATTERNS:
         for match in re.finditer(pat, output, flags=re.IGNORECASE):
             if has_explanatory_context(output, match.start(), match.end()):
@@ -140,6 +159,7 @@ def main() -> None:
                 continue
             warn(f"potential {label} in {tool} output")
 
+    audit_log("POST", tool, "ALLOWED")
     sys.exit(0)
 
 
