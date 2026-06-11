@@ -22,7 +22,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/src" \
             -w /src \
-            semgrep/semgrep:v1.166.0 \
+            semgrep/semgrep:1.166.0 \
             semgrep scan --config p/default --metrics=off --error --quiet .
 
   gitleaks:
@@ -42,5 +42,5 @@ jobs:
             -e GIT_CONFIG_COUNT=1 \
             -e GIT_CONFIG_KEY_0=safe.directory \
             -e GIT_CONFIG_VALUE_0=/repo \
-            gitleaks/gitleaks:v8.30.1 \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 \
             detect --source . --no-banner --redact
