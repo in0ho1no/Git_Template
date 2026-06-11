@@ -34,6 +34,16 @@ check_optional() {
 
 check "commit.template" "git-setup/COMMIT_TEMPLATE"
 check "core.hooksPath" "git-setup/hooks"
+check_file() {
+  if [ -f "$1" ]; then
+    echo "[OK] $1 が存在します"
+  else
+    echo "[未作成] $1 -- setup.sh を実行してください"
+  fi
+}
+
+check_file "git-setup/hooks/pre-commit"
+check_file ".github/workflows/security-scan.yml"
 check "fetch.prune" "true"
 check "pull.ff" "only"
 check "merge.ff" "false"

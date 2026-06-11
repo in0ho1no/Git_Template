@@ -19,7 +19,7 @@ echo "[設定] コミットテンプレート"
 # 概要: commit-msgなどの共通フックを全員で共有するため。
 # ---------------------------------------------------
 git config --local core.hooksPath git-setup/hooks
-chmod +x git-setup/hooks/commit-msg 2>/dev/null || true
+chmod +x git-setup/hooks/commit-msg git-setup/hooks/pre-commit 2>/dev/null || true
 default_hooks_dir="$(git rev-parse --git-common-dir)/hooks"
 mkdir -p "$default_hooks_dir"
 cat > "$default_hooks_dir/SETUP_CREATED_core.hooksPath_changed.txt" <<'EOF'
@@ -28,6 +28,12 @@ cat > "$default_hooks_dir/SETUP_CREATED_core.hooksPath_changed.txt" <<'EOF'
 フックを追加・変更する場合は git-setup/hooks を編集してください。
 EOF
 echo "[設定] core.hooksPath"
+
+if [ -f git-setup/hooks/pre-commit ]; then
+	echo "[設定] pre-commit フック"
+else
+	echo "[警告] pre-commit フックが見つかりませんでした。"
+fi
 
 
 # ---------------------------------------------------

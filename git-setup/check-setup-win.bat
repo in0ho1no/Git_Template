@@ -4,6 +4,8 @@ echo.
 
 call :check "commit.template" "git-setup/COMMIT_TEMPLATE"
 call :check "core.hooksPath" "git-setup/hooks"
+call :check_file "git-setup\hooks\pre-commit"
+call :check_file ".github\workflows\security-scan.yml"
 call :check "fetch.prune" "true"
 call :check "pull.ff" "only"
 call :check "merge.ff" "false"
@@ -35,4 +37,13 @@ for /f "delims=" %%v in ('git config --local %key% 2^>nul') do (
   exit /b
 )
 echo [任意] %key% -- 必要な環境でのみ設定されます
+exit /b
+
+:check_file
+set path=%~1
+if exist "%path%" (
+  echo [OK] %path% が存在します
+) else (
+  echo [未作成] %path% -- setup.bat を実行してください
+)
 exit /b
