@@ -38,7 +38,7 @@ git-setup/
 ├── check-setup-win.bat   # Windows用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── check-setup-mac.sh    # Mac用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── COMMIT_TEMPLATE   # コミットメッセージのテンプレート
-├── hooks/            # commit-msg / pre-commit などの共通Git hooksを管理するディレクトリ
+├── hooks/            # commit-msg などの共通Git hooksを管理するディレクトリ
 ├── setup-win.bat     # Windows用セットアップスクリプト
 └── setup-mac.sh      # Mac用セットアップスクリプト
 .github/workflows/security-scan.yml # CI でのセキュリティスキャン
@@ -54,9 +54,8 @@ setup 実行時には `core.hooksPath` を `git-setup/hooks` に設定する。
 標準の hooks ディレクトリは通常参照されず、案内ファイル `SETUP_CREATED_core.hooksPath_changed.txt` が作成される。  
 Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。  
 
-`pre-commit` では staged 対象を `git grep` でざっくり確認し、明らかな危険パターンや秘密情報らしき文字列を止める。
-
-本命の検査は GitHub Actions 上の `security-scan.yml` で Semgrep / gitleaks を回す。
+セキュリティ検査は GitHub Actions 上の `security-scan.yml` で Semgrep / gitleaks を実行する。
+シークレットの流出防止には、リポジトリ側で GitHub の Secret scanning / Push protection を有効化することを推奨する。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
