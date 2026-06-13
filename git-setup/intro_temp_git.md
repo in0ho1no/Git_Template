@@ -63,3 +63,53 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
+
+## GitHub CLI
+
+### 本体のインストール
+
+以下コマンドを用いてインストールする
+
+winget install --id GitHub.cli --source winget
+
+### ログイン
+
+以下コマンドを用いてログインする
+
+gh auth login
+
+以下は実行例
+
+```powershell
+PS D:\work\> gh auth login
+? Where do you use GitHub? GitHub.com
+? What is your preferred protocol for Git operations on this host? HTTPS
+? Authenticate Git with your GitHub credentials? Yes
+? How would you like to authenticate GitHub CLI? Login with a web browser
+
+! First copy your one-time code: XXXX-XXXX
+Press Enter to open https://github.com/login/device in your browser...
+✓ Authentication complete.
+- gh config set -h github.com git_protocol https
+✓ Configured git protocol
+✓ Logged in as bell-f10works
+PS D:\work\>
+```
+
+### アカウント切り替え
+
+gh auth switch
+
+### alias登録
+
+ghの組み込みエイリアスによって初回だけは登録しておく。
+
+gh alias set sw 'auth switch'
+
+以降は gh sw で呼び出せる。
+
+### 認証ヘルパーの設定
+
+ghをgitの認証ヘルパーに設定してghによるアカウント切り替えを反映した操作ができるようにする。
+
+gh auth setup-git
