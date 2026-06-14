@@ -3,10 +3,10 @@ name: Security Scan
 on:
   push:
     branches:
-      - main
+      - develop
   pull_request:
     branches:
-      - main
+      - develop
 
 permissions:
   contents: read
@@ -25,7 +25,14 @@ jobs:
             -v "$PWD:/src" \
             -w /src \
             local-semgrep \
-            semgrep scan --config p/default --metrics=off --error --quiet .
+            semgrep scan --config p/default --metrics=off --error --quiet --json --output .semgrep-results.json .
+      - name: Upload semgrep report
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: semgrep-results
+          path: .semgrep-results.json
+          if-no-files-found: warn
 
   gitleaks:
     name: gitleaks
@@ -47,4 +54,11 @@ jobs:
             -e GIT_CONFIG_KEY_0=safe.directory \
             -e GIT_CONFIG_VALUE_0=/repo \
             local-gitleaks \
-            detect --source . --no-banner --redact
+            detect --source . --no-banner --redact --report-format json --report-path .gitleaks-results.json
+      - name: Upload gitleaks report
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: gitleaks-results
+          path: .gitleaks-results.json
+          if-no-files-found: warn
