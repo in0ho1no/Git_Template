@@ -64,6 +64,18 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
 
+### hook の追加・変更ルール
+
+- このテンプレートでは setup 実行時に `core.hooksPath` を `git-setup/hooks` に切り替える。
+- hook を追加・変更するときは標準の `.git/hooks` ではなく、必ず `git-setup/hooks` を編集する。
+- Mac/Linux で新しい hook ファイルを追加した場合は実行権限を付与する。
+
+```sh
+chmod +x git-setup/hooks/<hook-name>
+```
+
+- setup 実行済みでも、hook 追加後は `git-setup/check-setup-mac.sh` または `git-setup/check-setup-win.bat` で設定状態を再確認する。
+
 ## GitHub CLI
 
 ### 本体のインストール
