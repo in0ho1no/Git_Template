@@ -55,6 +55,11 @@
 			{
 				"text": "コミットメッセージは必ず日本語で。丁寧語は不要。体言止めで。"
 			}
-		]
+		],
+		
+		"chat.tools.terminal.autoApprove": {
+			// ReadOnly系コマンドは許可する
+			"/^Get-ChildItem\\b/i": true,
+		},
 	}
 }
