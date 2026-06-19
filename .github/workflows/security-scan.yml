@@ -28,7 +28,7 @@ jobs:
             semgrep scan --config p/default --metrics=off --error --quiet --json --output .semgrep-results.json .
       - name: Upload semgrep report
         if: always()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: semgrep-results
           path: .semgrep-results.json
@@ -57,7 +57,7 @@ jobs:
             detect --source . --no-banner --redact --report-format json --report-path .gitleaks-results.json
       - name: Upload gitleaks report
         if: always()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gitleaks-results
           path: .gitleaks-results.json
