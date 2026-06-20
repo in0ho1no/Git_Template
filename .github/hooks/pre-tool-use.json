@@ -3,8 +3,8 @@
     "PreToolUse": [
       {
         "type": "command",
-        "command": "python .github/hooks/pre_tool_inspect.py",
-        "windows": "python .github\\hooks\\pre_tool_inspect.py",
+        "command": "python .github/hooks/entrypoint.py pre",
+        "windows": "python .github\\hooks\\entrypoint.py pre",
         "timeout": 15
       }
     ]

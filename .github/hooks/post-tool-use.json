@@ -3,8 +3,8 @@
     "PostToolUse": [
       {
         "type": "command",
-        "command": "python .github/hooks/post_tool_inspect.py",
-        "windows": "python .github\\hooks\\post_tool_inspect.py",
+        "command": "python .github/hooks/entrypoint.py post",
+        "windows": "python .github\\hooks\\entrypoint.py post",
         "timeout": 15
       }
     ]
