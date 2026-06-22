@@ -1,5 +1,11 @@
 #!/bin/sh
 
+git rev-parse --is-inside-work-tree >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "[エラー] .git が見つからないため、このスクリプトは実行できません。" >&2
+  exit 1
+fi
+
 echo "=== Git ローカル設定の確認 ==="
 echo ""
 

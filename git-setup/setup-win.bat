@@ -2,6 +2,12 @@
 chcp 65001 > nul
 setlocal
 
+git rev-parse --is-inside-work-tree > nul 2>&1
+if errorlevel 1 (
+    echo [エラー] .git が見つからないため、このスクリプトは実行できません。
+    exit /b 1
+)
+
 echo =============================================
 echo  Git ローカル設定セットアップ
 echo =============================================
