@@ -103,13 +103,13 @@ package-lock.json   text eol=lf
 *.7z binary
 
 # Office / PDF
-*.xlsx binary -diff
-*.xls binary -diff
-*.docx binary -diff
-*.doc binary -diff
-*.pptx binary -diff
-*.ppt binary -diff
-*.pdf binary -diff
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.doc binary
+*.pptx binary
+*.ppt binary
+*.pdf binary
 
 # メディア
 *.mp3 binary
