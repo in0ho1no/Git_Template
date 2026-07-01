@@ -42,6 +42,24 @@
 		"editor.showFoldingControls": "always",
 		"editor.wordSeparators": "./\\()\"'-:,.;<>~!@# ○$%^&*|+=[]{}`~?．。，、（）「」［］｛｝《》『』【】てにをはがのともへでや",
 
+		// skill settings
+		"[skill]": {
+			"files.encoding": "utf8",
+			"editor.insertSpaces": true,
+			"editor.tabSize": 2,
+			"editor.autoIndent": "advanced",
+			"editor.unicodeHighlight.ambiguousCharacters": true,
+			"editor.unicodeHighlight.invisibleCharacters": true,
+			"diffEditor.ignoreTrimWhitespace": false,
+			"editor.wordWrap": "on",
+			"editor.quickSuggestions": {
+				"comments": "off",
+				"strings": "on",
+				"other": "on"
+			},
+			"editor.wordBasedSuggestions": "off"
+		},
+		
 		// git settings
 		"files.exclude": {
 			// "**/.git": false,  // デフォルトでtrue
