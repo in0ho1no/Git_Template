@@ -7,6 +7,8 @@ updates:
       day: "friday"
       time: "17:30"
       timezone: "Asia/Tokyo"
+    cooldown: 
+      default-days: 3
     open-pull-requests-limit: 10
     assignees:
       - "in0ho1no"
@@ -24,6 +26,8 @@ updates:
       day: "friday"
       time: "17:30"
       timezone: "Asia/Tokyo"
+    cooldown: 
+      default-days: 3
     open-pull-requests-limit: 10
     assignees:
       - "in0ho1no"
@@ -41,6 +45,8 @@ updates:
       day: "friday"
       time: "17:30"
       timezone: "Asia/Tokyo"
+    cooldown: 
+      default-days: 3
     open-pull-requests-limit: 10
     assignees:
       - "in0ho1no"
@@ -50,4 +56,3 @@ updates:
       prefix: "gitleaks"
       include: "scope"
     target-branch: "develop"
-
