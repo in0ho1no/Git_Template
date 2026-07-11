@@ -3,13 +3,13 @@ chcp 65001 > nul
 setlocal
 
 echo =============================================
-echo  GitHub Secret scanning / Push protection 有効化
+echo  GitHub Ruleset / Secret scanning 有効化
 echo =============================================
 echo.
 
 
 rem "---------------------------------------------------"
-rem "目的: GitHub の Secret scanning と Push protection を有効化する。"
+rem "目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection を有効化する。"
 rem "概要: テンプレートから作成したリポジトリには設定が引き継がれないため、"
 rem "      リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。"
 rem "補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。"
@@ -30,6 +30,30 @@ if not defined REPO (
   exit /b 1
 )
 
+set RULESET_FILE=%~dp0gh-RequiredCI.json
+if not exist "%RULESET_FILE%" (
+  echo [エラー] Ruleset 定義が見つかりません: %RULESET_FILE%
+  pause
+  exit /b 1
+)
+
+set RULESET_ID=
+for /f "delims=" %%i in ('gh api "repos/%REPO%/rulesets" --jq ".[] ^| select(.name == \"RequiredCI\" and .source_type == \"Repository\") ^| .id" 2^>nul') do set RULESET_ID=%%i
+
+if defined RULESET_ID (
+  echo [設定] %REPO% の RequiredCI Ruleset を更新します
+  gh api -X PUT "repos/%REPO%/rulesets/%RULESET_ID%" --input "%RULESET_FILE%" --silent
+) else (
+  echo [設定] %REPO% に RequiredCI Ruleset を作成します
+  gh api -X POST "repos/%REPO%/rulesets" --input "%RULESET_FILE%" --silent
+)
+if errorlevel 1 (
+  echo [エラー] RequiredCI Ruleset の設定に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+for /f "delims=" %%i in ('gh api "repos/%REPO%/rulesets" --jq ".[] ^| select(.name == \"RequiredCI\" and .source_type == \"Repository\") ^| .id" 2^>nul') do set RULESET_ID=%%i
+
 echo [設定] %REPO% の Secret scanning / Push protection を有効化します
 gh api -X PATCH "repos/%REPO%" --silent ^
   -f "security_and_analysis[secret_scanning][status]=enabled" ^
@@ -43,6 +67,7 @@ if errorlevel 1 (
 
 echo [確認] 現在の設定:
 gh api "repos/%REPO%" --jq ".security_and_analysis | {secret_scanning, secret_scanning_push_protection}"
+if defined RULESET_ID gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, enforcement, conditions, rules}"
 
 echo.
 pause

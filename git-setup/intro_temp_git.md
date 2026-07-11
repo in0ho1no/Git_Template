@@ -38,8 +38,9 @@ git-setup/
 ├── check-setup-win.bat   # Windows用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── check-setup-mac.sh    # Mac用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── COMMIT_TEMPLATE   # コミットメッセージのテンプレート
-├── enable-push-protection-win.bat # Windows用 GitHub Push protection 有効化スクリプト
-├── enable-push-protection-mac.sh  # Mac用 GitHub Push protection 有効化スクリプト
+├── gh-enable-push-protection-win.bat # Windows用 GitHub Ruleset / Push protection 有効化スクリプト
+├── gh-enable-push-protection-mac.sh  # Mac用 GitHub Ruleset / Push protection 有効化スクリプト
+├── gh-RequiredCI.json                # developブランチ用 Ruleset 定義
 ├── hooks/            # commit-msg などの共通Git hooksを管理するディレクトリ
 ├── setup-win.bat     # Windows用セットアップスクリプト
 └── setup-mac.sh      # Mac用セットアップスクリプト
@@ -59,7 +60,7 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 セキュリティ検査は GitHub Actions 上の `security-scan.yml` で Semgrep / gitleaks を実行する。
 シークレットの流出防止には、リポジトリ側で GitHub の Secret scanning / Push protection を有効化することを推奨する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
-`enable-push-protection-win.bat` / `enable-push-protection-mac.sh` を一度実行して有効化する(gh CLI と管理者権限が必要)。
+`gh-enable-push-protection-win.bat` / `gh-enable-push-protection-mac.sh` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
