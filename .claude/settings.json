@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/entrypoint.py pre"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/entrypoint.py\" pre"
           }
         ]
       }
@@ -96,7 +96,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/entrypoint.py post"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/entrypoint.py\" post"
           }
         ]
       }
