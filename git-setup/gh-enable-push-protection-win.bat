@@ -30,6 +30,14 @@ if not defined REPO (
   exit /b 1
 )
 
+echo [設定] %REPO% の dependencies ラベルを作成/更新します
+gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update" --force
+if errorlevel 1 (
+  echo [エラー] dependencies ラベルの作成/更新に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+
 set RULESET_FILE=%~dp0gh-RequiredCI.json
 if not exist "%RULESET_FILE%" (
   echo [エラー] Ruleset 定義が見つかりません: %RULESET_FILE%

@@ -26,6 +26,12 @@ if [ -z "$repo" ]; then
   exit 1
 fi
 
+echo "[設定] $repo の dependencies ラベルを作成/更新します"
+if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update" --force; then
+  echo "[エラー] dependencies ラベルの作成/更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+  exit 1
+fi
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ruleset_file="$script_dir/gh-RequiredCI.json"
 if [ ! -f "$ruleset_file" ]; then
