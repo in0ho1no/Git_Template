@@ -32,7 +32,8 @@ if not defined REPO (
 
 echo [設定] %REPO% の dependencies ラベルを作成/更新します
 set LABEL_EXISTS=
-for /f "delims=" %%l in ('gh label list --repo "%REPO%" --limit 100 --json name --jq ".[] ^| select(.name == \"dependencies\") ^| .name" 2^>nul') do set LABEL_EXISTS=%%l
+gh api "repos/%REPO%/labels/dependencies" >nul 2>nul
+if not errorlevel 1 set LABEL_EXISTS=1
 
 if defined LABEL_EXISTS (
   choice /c YN /m "dependencies ラベルは既に存在します。色と説明を上書きしますか?"

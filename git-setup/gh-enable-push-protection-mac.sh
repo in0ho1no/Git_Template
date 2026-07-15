@@ -27,7 +27,7 @@ if [ -z "$repo" ]; then
 fi
 
 echo "[設定] $repo の dependencies ラベルを作成/更新します"
-label_exists=$(gh label list --repo "$repo" --limit 100 --json name --jq '.[] | select(.name == "dependencies") | .name' 2>/dev/null | head -n 1 || true)
+label_exists=$(gh api "repos/$repo/labels/dependencies" >/dev/null 2>&1 && printf '1' || true)
 
 if [ -n "$label_exists" ]; then
   while :; do
