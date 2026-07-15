@@ -26,6 +26,37 @@ if [ -z "$repo" ]; then
   exit 1
 fi
 
+echo "[設定] $repo の dependencies ラベルを作成/更新します"
+label_exists=$(gh api "repos/$repo/labels/dependencies" >/dev/null 2>&1 && printf '1' || true)
+
+if [ -n "$label_exists" ]; then
+  while :; do
+    printf "dependencies ラベルは既に存在します。色と説明を上書きしますか? [y/n] "
+    read -r answer
+    case "$answer" in
+      y|Y)
+        if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update" --force; then
+          echo "[エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+          exit 1
+        fi
+        break
+        ;;
+      n|N|"")
+        echo "[スキップ] dependencies ラベルの更新を見送りました。"
+        break
+        ;;
+      *)
+        echo "y か n で入力してください。" >&2
+        ;;
+    esac
+  done
+else
+  if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update"; then
+    echo "[エラー] dependencies ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+    exit 1
+  fi
+fi
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ruleset_file="$script_dir/gh-RequiredCI.json"
 if [ ! -f "$ruleset_file" ]; then
