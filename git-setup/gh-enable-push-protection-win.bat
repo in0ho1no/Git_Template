@@ -31,11 +31,28 @@ if not defined REPO (
 )
 
 echo [設定] %REPO% の dependencies ラベルを作成/更新します
-gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update" --force
-if errorlevel 1 (
-  echo [エラー] dependencies ラベルの作成/更新に失敗しました。リポジトリの管理者権限があるか確認してください。
-  pause
-  exit /b 1
+set LABEL_EXISTS=
+for /f "delims=" %%l in ('gh label list --repo "%REPO%" --limit 100 --json name --jq ".[] ^| select(.name == \"dependencies\") ^| .name" 2^>nul') do set LABEL_EXISTS=%%l
+
+if defined LABEL_EXISTS (
+  choice /c YN /m "dependencies ラベルは既に存在します。色と説明を上書きしますか?"
+  if errorlevel 2 (
+    echo [スキップ] dependencies ラベルの更新を見送りました。
+  ) else (
+    gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update" --force
+    if errorlevel 1 (
+      echo [エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。
+      pause
+      exit /b 1
+    )
+  )
+) else (
+  gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update"
+  if errorlevel 1 (
+    echo [エラー] dependencies ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。
+    pause
+    exit /b 1
+  )
 )
 
 set RULESET_FILE=%~dp0gh-RequiredCI.json

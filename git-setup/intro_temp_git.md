@@ -61,7 +61,7 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 シークレットの流出防止には、リポジトリ側で GitHub の Secret scanning / Push protection を有効化することを推奨する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
 `gh-enable-push-protection-win.bat` / `gh-enable-push-protection-mac.sh` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
-あわせて `dependencies` ラベルも作成/更新するため、Dependabot の `labels` 設定と GitHub 側のラベル定義を揃えられる。
+あわせて `dependencies` ラベルも扱う。既に存在する場合は色と説明を上書きする前に確認を求めるため、不要な上書きを避けられる。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
