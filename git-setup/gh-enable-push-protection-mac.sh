@@ -30,19 +30,26 @@ echo "[設定] $repo の dependencies ラベルを作成/更新します"
 label_exists=$(gh label list --repo "$repo" --limit 100 --json name --jq '.[] | select(.name == "dependencies") | .name' 2>/dev/null | head -n 1 || true)
 
 if [ -n "$label_exists" ]; then
-  printf "dependencies ラベルは既に存在します。色と説明を上書きしますか? [y/N] "
-  read -r answer
-  case "$answer" in
-    y|Y|yes|YES)
-      if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update" --force; then
-        echo "[エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
-        exit 1
-      fi
-      ;;
-    *)
-      echo "[スキップ] dependencies ラベルの更新を見送りました。"
-      ;;
-  esac
+  while :; do
+    printf "dependencies ラベルは既に存在します。色と説明を上書きしますか? [y/n] "
+    read -r answer
+    case "$answer" in
+      y|Y)
+        if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update" --force; then
+          echo "[エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+          exit 1
+        fi
+        break
+        ;;
+      n|N|"")
+        echo "[スキップ] dependencies ラベルの更新を見送りました。"
+        break
+        ;;
+      *)
+        echo "y か n で入力してください。" >&2
+        ;;
+    esac
+  done
 else
   if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update"; then
     echo "[エラー] dependencies ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
