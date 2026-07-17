@@ -38,8 +38,8 @@ git-setup/
 ├── check-setup-win.bat   # Windows用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── check-setup-mac.sh    # Mac用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── COMMIT_TEMPLATE   # コミットメッセージのテンプレート
-├── gh-enable-push-protection-win.bat # Windows用 GitHub Ruleset / Push protection 有効化スクリプト
-├── gh-enable-push-protection-mac.sh  # Mac用 GitHub Ruleset / Push protection 有効化スクリプト
+├── gh-enable-push-protection-win.bat # Windows用 GitHub Ruleset / Push protection / Auto-merge 有効化スクリプト
+├── gh-enable-push-protection-mac.sh  # Mac用 GitHub Ruleset / Push protection / Auto-merge 有効化スクリプト
 ├── gh-RequiredCI.json                # developブランチ用 Ruleset 定義
 ├── hooks/            # commit-msg などの共通Git hooksを管理するディレクトリ
 ├── setup-win.bat     # Windows用セットアップスクリプト
@@ -61,6 +61,11 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 シークレットの流出防止には、リポジトリ側で GitHub の Secret scanning / Push protection を有効化することを推奨する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
 `gh-enable-push-protection-win.bat` / `gh-enable-push-protection-mac.sh` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
+このスクリプトはあわせて GitHub の `allow_auto_merge` と `allow_squash_merge` も有効化するため、限定された更新 PR に対して auto-merge を使える前提も整う。
+このテンプレートでは [ .github/workflows/auto-merge-security-tool-updates.yml ](.github/workflows/auto-merge-security-tool-updates.yml) により、GitHub が付与する PR メタデータ上で `dependabot[bot]` が作成した PR であり、変更ファイルが `docker/semgrep/Dockerfile` または `docker/gitleaks/Dockerfile` のみである場合に限って auto-squash merge を予約する。
+ブランチ名、PR タイトル、ラベルのような偽装しやすい情報には依存していないため、通常の手作業 PR や他の Dependabot PR が誤って自動マージ対象になることは避けている。
+ただし、実際のマージは RequiredCI Ruleset などの必須チェックを通過した後にのみ行われる。
+また、auto-merge 予約後に条件を満たさない変更が push された場合は、同ワークフローが予約済みの auto-merge を解除する。
 あわせて `dependencies` ラベルも扱う。既に存在する場合は y/n で確認してから色と説明を上書きするため、不要な上書きを避けられる。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。

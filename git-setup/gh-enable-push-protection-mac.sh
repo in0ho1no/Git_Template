@@ -3,13 +3,13 @@
 set -eu
 
 echo "============================================="
-echo " GitHub Ruleset / Secret scanning 有効化"
+echo " GitHub Ruleset / Secret scanning / Auto-merge 有効化"
 echo "============================================="
 echo ""
 
 
 # ---------------------------------------------------
-# 目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection を有効化する。
+# 目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化する。
 # 概要: テンプレートから作成したリポジトリには設定が引き継がれないため、
 #       リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。
 # 補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。
@@ -86,15 +86,17 @@ ruleset_id=$(gh api "repos/$repo/rulesets" \
   --jq '.[] | select(.name == "RequiredCI" and .source_type == "Repository") | .id' | head -n 1)
 ruleset_endpoint="repos/$repo/rulesets/$ruleset_id"
 
-echo "[設定] $repo の Secret scanning / Push protection を有効化します"
+echo "[設定] $repo の Secret scanning / Push protection / Auto-merge 関連設定を有効化します"
 if ! gh api -X PATCH "repos/$repo" --silent \
   -f "security_and_analysis[secret_scanning][status]=enabled" \
-  -f "security_and_analysis[secret_scanning_push_protection][status]=enabled"; then
+  -f "security_and_analysis[secret_scanning_push_protection][status]=enabled" \
+  -f "allow_auto_merge=true" \
+  -f "allow_squash_merge=true"; then
   echo "[エラー] 有効化に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
   echo "         プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要です。" >&2
   exit 1
 fi
 
 echo "[確認] 現在の設定:"
-gh api "repos/$repo" --jq '.security_and_analysis | {secret_scanning, secret_scanning_push_protection}'
+gh api "repos/$repo" --jq '{allow_auto_merge, allow_squash_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}'
 gh api "$ruleset_endpoint" --jq '{name, enforcement, conditions, rules}'
