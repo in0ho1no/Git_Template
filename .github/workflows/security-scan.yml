@@ -33,7 +33,7 @@ jobs:
             -v "$PWD:/src" \
             -w /src \
             local-semgrep \
-            semgrep scan --config p/default --metrics=off --error --quiet "${exclude_args[@]}" --json --output .semgrep-results.json . || true
+            semgrep scan --config p/default --metrics=off --error --quiet "${exclude_args[@]}" --json --output semgrep-results.json . || true
       - name: Check plaintext HTTP links in Markdown (allow localhost)
         run: |
           matches=$(grep -RInE --include='*.md' 'http://[^[:space:])>\"]+' . | grep -Ev 'http://(localhost|127\.0\.0\.1|\[::1\]|::1)([:/]|$)' || true)
@@ -44,10 +44,10 @@ jobs:
           fi
       - name: Check semgrep results
         run: |
-          if [ -f .semgrep-results.json ]; then
-            python3 -m json.tool .semgrep-results.json
+          if [ -f semgrep-results.json ]; then
+            python3 -m json.tool semgrep-results.json
             # エラー数をカウント
-            errors=$(python3 -c "import json; data=json.load(open('.semgrep-results.json')); print(len(data.get('results', [])))")
+            errors=$(python3 -c "import json; data=json.load(open('semgrep-results.json')); print(len(data.get('results', [])))")
             echo "Semgrep found $errors issues"
             if [ "$errors" -gt 0 ]; then
               exit 1
@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: semgrep-results
-          path: .semgrep-results.json
+          path: semgrep-results.json
           if-no-files-found: warn
 
   gitleaks:
@@ -84,11 +84,11 @@ jobs:
             -e GIT_CONFIG_KEY_0=safe.directory \
             -e GIT_CONFIG_VALUE_0=/repo \
             local-gitleaks \
-            detect --source . --no-banner --redact --report-format json --report-path .gitleaks-results.json
+            detect --source . --no-banner --redact --report-format json --report-path gitleaks-results.json
       - name: Upload gitleaks report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gitleaks-results
-          path: .gitleaks-results.json
+          path: gitleaks-results.json
           if-no-files-found: warn

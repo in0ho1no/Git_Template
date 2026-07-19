@@ -22,6 +22,10 @@ __pycache__/
 # Logs
 *.log
 
+# Security scan reports
+semgrep-results.json
+gitleaks-results.json
+
 ###############################################################################
 # END TEMPLATE: git-template
 ###############################################################################
