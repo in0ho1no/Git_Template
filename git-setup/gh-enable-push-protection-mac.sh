@@ -64,9 +64,12 @@ if [ ! -f "$ruleset_file" ]; then
   exit 1
 fi
 
-ruleset_id=$(gh api "repos/$repo/rulesets" \
-  --jq '.[] | select(.name == "RequiredCI" and .source_type == "Repository") | .id' \
-  2>/dev/null | head -n 1 || true)
+# 一覧取得の失敗を握りつぶすと POST に進んで重複作成/422 になるため、ここで明示的に止める
+if ! ruleset_id=$(gh api "repos/$repo/rulesets" \
+  --jq '[.[] | select(.name == "RequiredCI" and .source_type == "Repository")][0].id // empty'); then
+  echo "[エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+  exit 1
+fi
 
 if [ -n "$ruleset_id" ]; then
   echo "[設定] $repo の RequiredCI Ruleset を更新します"
@@ -83,8 +86,8 @@ if ! gh api -X "$ruleset_method" "$ruleset_endpoint" --input "$ruleset_file" --s
   exit 1
 fi
 ruleset_id=$(gh api "repos/$repo/rulesets" \
-  --jq '.[] | select(.name == "RequiredCI" and .source_type == "Repository") | .id' | head -n 1)
-ruleset_endpoint="repos/$repo/rulesets/$ruleset_id"
+  --jq '[.[] | select(.name == "RequiredCI" and .source_type == "Repository")][0].id // empty' \
+  2>/dev/null || true)
 
 echo "[設定] $repo の Secret scanning / Push protection / Auto-merge 関連設定を有効化します"
 if ! gh api -X PATCH "repos/$repo" --silent \
@@ -99,4 +102,6 @@ fi
 
 echo "[確認] 現在の設定:"
 gh api "repos/$repo" --jq '{allow_auto_merge, allow_squash_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}'
-gh api "$ruleset_endpoint" --jq '{name, enforcement, conditions, rules}'
+if [ -n "$ruleset_id" ]; then
+  gh api "repos/$repo/rulesets/$ruleset_id" --jq '{name, enforcement, conditions, rules}'
+fi

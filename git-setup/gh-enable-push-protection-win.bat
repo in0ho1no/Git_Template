@@ -63,8 +63,18 @@ if not exist "%RULESET_FILE%" (
   exit /b 1
 )
 
+rem for /f 経由では ^| のキャレットが jq 式に混入し検出が失敗するため、一時ファイル経由で受け取る
+set RULESET_TMP=%TEMP%\gh-ruleset-id.tmp
 set RULESET_ID=
-for /f "delims=" %%i in ('gh api "repos/%REPO%/rulesets" --jq ".[] ^| select(.name == \"RequiredCI\" and .source_type == \"Repository\") ^| .id" 2^>nul') do set RULESET_ID=%%i
+gh api "repos/%REPO%/rulesets" --jq "[.[] | select(.name == \"RequiredCI\" and .source_type == \"Repository\")][0].id // empty" > "%RULESET_TMP%"
+if errorlevel 1 (
+  del "%RULESET_TMP%" > nul 2> nul
+  echo [エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+set /p RULESET_ID=<"%RULESET_TMP%"
+del "%RULESET_TMP%" > nul 2> nul
 
 if defined RULESET_ID (
   echo [設定] %REPO% の RequiredCI Ruleset を更新します
@@ -78,7 +88,10 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-for /f "delims=" %%i in ('gh api "repos/%REPO%/rulesets" --jq ".[] ^| select(.name == \"RequiredCI\" and .source_type == \"Repository\") ^| .id" 2^>nul') do set RULESET_ID=%%i
+gh api "repos/%REPO%/rulesets" --jq "[.[] | select(.name == \"RequiredCI\" and .source_type == \"Repository\")][0].id // empty" > "%RULESET_TMP%" 2> nul
+set RULESET_ID=
+set /p RULESET_ID=<"%RULESET_TMP%"
+del "%RULESET_TMP%" > nul 2> nul
 
 echo [設定] %REPO% の Secret scanning / Push protection / Auto-merge 関連設定を有効化します
 gh api -X PATCH "repos/%REPO%" --silent ^
