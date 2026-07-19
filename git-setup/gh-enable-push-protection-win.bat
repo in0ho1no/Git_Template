@@ -98,7 +98,8 @@ gh api -X PATCH "repos/%REPO%" --silent ^
   -f "security_and_analysis[secret_scanning][status]=enabled" ^
   -f "security_and_analysis[secret_scanning_push_protection][status]=enabled" ^
   -f "allow_auto_merge=true" ^
-  -f "allow_squash_merge=true"
+  -f "allow_squash_merge=true" ^
+  -f "delete_branch_on_merge=true"
 if errorlevel 1 (
   echo [エラー] 有効化に失敗しました。リポジトリの管理者権限があるか確認してください。
   echo          プライベートリポジトリでは GitHub Advanced Security ^(Secret Protection^) の契約が必要です。
@@ -107,7 +108,7 @@ if errorlevel 1 (
 )
 
 echo [確認] 現在の設定:
-gh api "repos/%REPO%" --jq "{allow_auto_merge, allow_squash_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
+gh api "repos/%REPO%" --jq "{allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
 if defined RULESET_ID gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, enforcement, conditions, rules}"
 
 echo.
