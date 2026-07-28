@@ -83,5 +83,8 @@
 			// ReadOnly系コマンドは許可する
 			"/^Get-ChildItem\\b/i": true,
 		},
+
+		// chronicleコマンド用にセッションデータが保持される
+		"github.copilot.chat.localIndex.enabled": true,
 	}
 }
