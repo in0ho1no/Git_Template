@@ -59,7 +59,12 @@
 			},
 			"editor.wordBasedSuggestions": "off"
 		},
-		
+		// context: forkを利用できるようにしておく
+		"github.copilot.chat.skillTool.enabled": true,
+		// 手動で圧縮するため自動圧縮を無効にしておく
+		"github.copilot.chat.summarizeAgentConversationHistory.enabled":false,
+
+
 		// git settings
 		"files.exclude": {
 			// "**/.git": false,  // デフォルトでtrue
