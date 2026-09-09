@@ -1,4 +1,6 @@
 @echo off
+chcp 65001 > nul
+setlocal
 
 git rev-parse --is-inside-work-tree > nul 2>&1
 if errorlevel 1 (
