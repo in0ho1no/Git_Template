@@ -133,3 +133,12 @@ gh alias set sw 'auth switch'
 ghをgitの認証ヘルパーに設定してghによるアカウント切り替えを反映した操作ができるようにする。
 
 gh auth setup-git
+
+## .gitignore以外での除外手段
+
+.gitignore と同様の除外パターンをローカル環境だけに設定できる。  
+fork 先で個別に生成される未追跡ファイルなどを除外したい場合に有用。
+
+```
+.git/info/exclude
+```
