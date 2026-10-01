@@ -121,7 +121,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
         {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": log_path},
     )
     log_text = read_text(log_path) if code == 0 else ""
-    passed = code == 0 and "cmd:gh" in log_text and "supersecret" not in log_text and "GH_TOKEN=" not in log_text
+    passed = code == 0 and "cmd:[REDACTED]" in log_text and "supersecret" not in log_text and "GH_TOKEN=" not in log_text
     status = "OK" if passed else "FAIL"
     if status == "FAIL":
         ok = False

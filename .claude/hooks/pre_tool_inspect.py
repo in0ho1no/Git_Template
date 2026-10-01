@@ -59,38 +59,22 @@ def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
     if os.environ.get("HOOK_NO_LOG"):
         return
     ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
+    line = f"{ts} [{phase:<4}] {result:<8} {detail[:120]}\n"
     try:
         log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         with open(log_path, "a", encoding="utf-8", errors="backslashreplace") as f:
             f.write(line)
-    except OSError as exc:
-        print(f"[audit_log] write failed: {exc}", file=sys.stderr)
+    except OSError:
+        print("[audit_log] write failed: details redacted", file=sys.stderr)
 
 
 def summarize_path(path: str) -> str:
-    normalized = normalize_path(path).strip()
-    if not normalized:
-        return ""
-    parts = [part for part in normalized.split("/") if part and part != "."]
-    if len(parts) >= 2:
-        return "/".join(parts[-2:])
-    return normalized
+    return "[REDACTED]"
 
 
 def summarize_command(command: str) -> str:
-    tokens = re.findall(r'"[^"]*"|\'[^\']*\'|\S+', command)
-    for token in tokens:
-        cleaned = token.strip().strip("\"'")
-        if not cleaned:
-            continue
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", cleaned):
-            continue
-        if cleaned.lower() in {"sudo", "env", "/usr/bin/env", "command", "time"}:
-            continue
-        return os.path.basename(normalize_path(cleaned))
-    return "shell"
+    return "[REDACTED]"
 
 
 def normalize_path(value: str) -> str:
@@ -119,8 +103,8 @@ def main() -> None:
         for key in ("command", "file_path", "path", "content", "new_string", "new_content"):
             if inp.get(key) is not None and not isinstance(inp[key], str):
                 raise ValueError(f"tool argument {key} must be a string")
-    except Exception as e:
-        print(f"[pre_tool_inspect] input parse error: {e}", file=sys.stderr)
+    except Exception:
+        print("[pre_tool_inspect] input parse error: invalid hook input", file=sys.stderr)
         sys.exit(2)
 
     def block(reason: str) -> None:
@@ -157,14 +141,14 @@ def main() -> None:
         ]
         for pat, label in dangerous:
             if re.search(pat, normalized_cmd, flags=re.IGNORECASE):
-                block(f"{label}: {cmd!r}")
+                block(label)
 
         readers = (
             r"\b(cat|less|more|head|tail|cp|mv|grep|awk|sed|od|xxd|base64|tar|zip|"
             r"get-content|gc|type|copy-item|move-item)\b"
         )
         if re.search(readers + r"[^|;&]*" + SECRET_PATH_PATTERN, normalized_cmd, flags=re.IGNORECASE):
-            block(f"shell access to secret-like path: {cmd!r}")
+            block("shell access to secret-like path")
 
     # ---- File-path checks (defense in depth for Read/Edit/Write) --------
     if tool in ("Read", "Edit", "Write"):
@@ -172,7 +156,7 @@ def main() -> None:
         normalized_path = normalize_path(path)
         for pat in SENSITIVE_PATH_PATTERNS:
             if re.search(pat, normalized_path, flags=re.IGNORECASE):
-                block(f"sensitive file access: {path!r}")
+                block("sensitive file access")
 
     # ---- Content checks for Write/Edit (exfiltration + invisible chars) -
     if tool in ("Write", "Edit"):
