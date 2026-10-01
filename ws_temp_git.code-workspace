@@ -41,6 +41,7 @@
 		"editor.stickyScroll.enabled": true,
 		"editor.showFoldingControls": "always",
 		"editor.wordSeparators": "./\\()\"'-:,.;<>~!@# ○$%^&*|+=[]{}`~?．。，、（）「」［］｛｝《》『』【】てにをはがのともへでや",
+		"editor.renderWhitespace": "all",
 
 		// skill settings
 		"[skill]": {
