@@ -3,6 +3,7 @@
 Smoke tests for .github/hooks/pre_tool_inspect.py and post_tool_inspect.py.
 This script only passes JSON strings to the hooks for regex inspection.
 No actual commands are executed.
+Use --inspection-only to skip filesystem-based audit log tests.
 """
 import json
 import os
@@ -65,6 +66,19 @@ pre_cases = [
     ("pre: isolate in content",    {"tool_name": "create_file",     "tool_input": {"filePath": "out.py", "content": f"code{_lri}here"}}, True),
 ]
 
+pre_cases.extend([
+        (f"{description}: CLI JSON string", {"toolName": payload.get("tool_name", payload.get("toolName")),
+            "toolArgs": json.dumps(payload.get("tool_input", payload.get("toolArgs")))}, expected)
+        for description, payload, expected in list(pre_cases)
+])
+pre_cases.append(
+    ("pre: Local JSON string", {"tool_name": "read_file", "tool_input": json.dumps({"filePath": "C:/fictional/.env"})}, True)
+)
+pre_cases.extend([
+        (f"pre: invalid CLI args {index}", {"toolName": "view", "toolArgs": invalid}, True)
+    for index, invalid in enumerate(["{", "", "null", "[]", "1", "true", '"text"', None, [], 0, False])
+])
+
 post_cases = [
     # (description, payload, expect_warned)
     # --- Safe outputs (should pass through) ---
@@ -101,8 +115,7 @@ post_cases = [
 ok = True
 for desc, payload, expect_flagged in pre_cases:
     code, message = run(PRE_HOOK, payload)
-    flagged = code == 2
-    status = "OK" if flagged == expect_flagged else "FAIL"
+    status = "OK" if code == (2 if expect_flagged else 0) else "FAIL"
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {message}" if message else ""))
@@ -114,6 +127,9 @@ for desc, payload, expect_flagged in post_cases:
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {message}" if message else ""))
+
+if "--inspection-only" in sys.argv:
+    sys.exit(0 if ok else 1)
 
 with tempfile.TemporaryDirectory() as temp_dir:
     log_path = os.path.join(temp_dir, "audit.log")

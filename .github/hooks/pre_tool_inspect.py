@@ -174,12 +174,20 @@ def main() -> None:
         sys.exit(1)
 
     tool_name = data.get("tool_name", data.get("toolName", "")) or ""
-    tool_input = data.get("tool_input", data.get("toolArgs", {})) or {}
+    tool_input = data.get("tool_input", data.get("toolArgs", {}))
 
     def block(reason: str) -> None:
         audit_log("PRE", tool_name, "BLOCKED", reason)
         print(f"BLOCKED: {reason}. Remove suspicious content and retry.", file=sys.stderr)
         sys.exit(2)
+
+    if isinstance(tool_input, str):
+        try:
+            tool_input = json.loads(tool_input)
+        except json.JSONDecodeError:
+            block("tool arguments must contain valid JSON")
+    if not isinstance(tool_input, dict):
+        block("tool arguments must be a JSON object")
 
     if looks_like_shell_tool(tool_name, tool_input):
         shell_commands = collect_keyed_strings(tool_input, {"command"})
