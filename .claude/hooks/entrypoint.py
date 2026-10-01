@@ -24,6 +24,9 @@ def find_repo_root(start_dir: Path) -> Path:
 
 
 def main() -> None:
+    if not os.environ.get("CLAUDE_PROJECT_DIR"):
+        return
+
     if len(sys.argv) != 2 or sys.argv[1] not in {"pre", "post"}:
         print("Usage: entrypoint.py [pre|post]", file=sys.stderr)
         sys.exit(1)

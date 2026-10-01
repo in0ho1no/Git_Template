@@ -1,11 +1,15 @@
 {
+  "version": 1,
   "hooks": {
-    "PreToolUse": [
+    "preToolUse": [
       {
         "type": "command",
         "command": "python .github/hooks/entrypoint.py pre",
-        "windows": "python .github\\hooks\\entrypoint.py pre",
-        "timeout": 15
+        "bash": "python .github/hooks/entrypoint.py pre",
+        "powershell": "python .github\\hooks\\entrypoint.py pre",
+        "cwd": ".",
+        "timeout": 15,
+        "timeoutSec": 15
       }
     ]
   }

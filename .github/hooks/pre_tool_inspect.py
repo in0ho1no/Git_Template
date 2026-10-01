@@ -173,8 +173,8 @@ def main() -> None:
         print(f"[pre_tool_inspect] input parse error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    tool_name = data.get("tool_name", "") or ""
-    tool_input = data.get("tool_input", {}) or {}
+    tool_name = data.get("tool_name", data.get("toolName", "")) or ""
+    tool_input = data.get("tool_input", data.get("toolArgs", {})) or {}
 
     def block(reason: str) -> None:
         audit_log("PRE", tool_name, "BLOCKED", reason)

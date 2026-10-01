@@ -153,8 +153,9 @@ def main() -> None:
         print(f"[post_tool_inspect] input parse error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    tool_name: str = data.get("tool_name", "") or ""
-    output = extract_text(data.get("tool_response", {}))
+    tool_name: str = data.get("tool_name", data.get("toolName", "")) or ""
+    tool_response = data.get("tool_response", data.get("toolResult", data.get("tool_result", {})))
+    output = extract_text(tool_response)
 
     if not output:
         sys.exit(0)

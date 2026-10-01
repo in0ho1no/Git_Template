@@ -1,11 +1,15 @@
 {
+  "version": 1,
   "hooks": {
-    "PostToolUse": [
+    "postToolUse": [
       {
         "type": "command",
         "command": "python .github/hooks/entrypoint.py post",
-        "windows": "python .github\\hooks\\entrypoint.py post",
-        "timeout": 15
+        "bash": "python .github/hooks/entrypoint.py post",
+        "powershell": "python .github\\hooks\\entrypoint.py post",
+        "cwd": ".",
+        "timeout": 15,
+        "timeoutSec": 15
       }
     ]
   }
