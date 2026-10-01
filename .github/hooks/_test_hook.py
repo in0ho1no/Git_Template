@@ -11,6 +11,7 @@ import runpy
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from unittest.mock import mock_open, patch
 
 os.environ["HOOK_NO_LOG"] = "1"  # Suppress audit log writes during tests
@@ -154,6 +155,42 @@ for hook_dir in (".claude/hooks", ".github/hooks"):
                 ok = ok and passed
                 print(f"[{'OK' if passed else 'FAIL'}] {hook_dir} {phase}: invalid input {raw_input!r}, {encoding}: exit={code}")
 
+        if phase == "pre":
+            malformed_inputs = [
+                b"[]", b"null", b"1", b'"text"',
+                b'{"tool_name":"Bash","tool_input":1}',
+                b'{"tool_name":"Bash","tool_input":null}',
+                b'{"tool_name":1,"tool_input":{}}',
+            ]
+            if hook_dir == ".claude/hooks":
+                malformed_inputs.extend([
+                    b'{"tool_name":"Bash","tool_input":{"command":1}}',
+                    b'{"tool_name":"Read","tool_input":{"file_path":[]}}',
+                    b'{"tool_name":"Write","tool_input":{"content":{}}}',
+                ])
+            else:
+                for arguments in (
+                    {"command": ["git", "reset", "--hard"]},
+                    {"command": 1}, {"command": None}, {"command": False}, {"command": {}},
+                    {"nested": [{"command": ["git", "reset", "--hard"]}]},
+                ):
+                    for tool_args in (arguments, json.dumps(arguments)):
+                        malformed_inputs.append(json.dumps({"toolName": "bash", "toolArgs": tool_args}).encode("utf-8"))
+            for raw_input in malformed_inputs:
+                code, message = run(hook, raw_input)
+                passed = code == 2 and "Traceback" not in message
+                ok = ok and passed
+                print(f"[{'OK' if passed else 'FAIL'}] {hook_dir}: malformed payload {raw_input!r}: exit={code}")
+        else:
+            for raw_input in (
+                b"[]", b"null", b"1", b'"text"',
+                b'{"tool_name":1}', b'{"tool_name":null}', b'{"tool_name":[]}',
+            ):
+                code, message = run(hook, raw_input)
+                passed = code == 1 and "input parse error" in message and "Traceback" not in message
+                ok = ok and passed
+                print(f"[{'OK' if passed else 'FAIL'}] {hook_dir}: malformed post payload {raw_input!r}: exit={code}")
+
         namespace = runpy.run_path(hook_path)
         encoded_records = []
         mocked_open = mock_open()
@@ -169,6 +206,15 @@ for hook_dir in (".claude/hooks", ".github/hooks"):
         passed = len(encoded_records) == 1 and b"\\ud800" in encoded_records[0]
         ok = ok and passed
         print(f"[{'OK' if passed else 'FAIL'}] {hook_dir} {phase}: surrogate audit record (memory only)")
+
+    namespace = runpy.run_path(f"{hook_dir}/entrypoint.py")
+    project_root = Path.cwd() / "fictional_project"
+    hook_location = project_root / Path(hook_dir)
+    for has_git in (False, True):
+        with patch.object(Path, "exists", lambda candidate: has_git and candidate == project_root / ".git"):
+            passed = namespace["find_repo_root"](hook_location) == project_root
+        ok = ok and passed
+        print(f"[{'OK' if passed else 'FAIL'}] {hook_dir}: root resolution has_git={has_git} (memory only)")
 
 if "--inspection-only" in sys.argv:
     sys.exit(0 if ok else 1)

@@ -20,7 +20,7 @@ def find_repo_root(start_dir: Path) -> Path:
     for candidate in [current, *current.parents]:
         if (candidate / ".git").exists():
             return candidate
-    return start_dir.parents[2]
+    return start_dir.parents[1]
 
 
 def main() -> None:

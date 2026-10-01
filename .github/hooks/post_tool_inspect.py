@@ -152,11 +152,15 @@ def main() -> None:
     try:
         sys.stdin.reconfigure(encoding="utf-8", errors="strict")
         data = json.load(sys.stdin)
+        if not isinstance(data, dict):
+            raise ValueError("hook input must be a JSON object")
+        tool_name = data.get("tool_name", data.get("toolName", ""))
+        if not isinstance(tool_name, str):
+            raise ValueError("tool name must be a string")
     except Exception as e:
         print(f"[post_tool_inspect] input parse error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    tool_name: str = data.get("tool_name", data.get("toolName", "")) or ""
     tool_response = data.get("tool_response", data.get("toolResult", data.get("tool_result", {})))
     output = extract_text(tool_response)
 

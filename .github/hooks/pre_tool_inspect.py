@@ -159,6 +159,18 @@ def collect_keyed_strings(value: Any, key_hints: tuple[str, ...] | set[str]) -> 
     return collected
 
 
+def has_invalid_command_type(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key.replace("_", "").lower() == "command" and not isinstance(nested, str):
+                return True
+            if has_invalid_command_type(nested):
+                return True
+    elif isinstance(value, list):
+        return any(has_invalid_command_type(nested) for nested in value)
+    return False
+
+
 def looks_like_shell_tool(tool_name: str, tool_input: dict[str, Any]) -> bool:
     normalized_name = tool_name.lower()
     if any(hint in normalized_name for hint in SHELL_TOOL_HINTS):
@@ -172,11 +184,15 @@ def main() -> None:
     try:
         sys.stdin.reconfigure(encoding="utf-8", errors="strict")
         data = json.load(sys.stdin)
+        if not isinstance(data, dict):
+            raise ValueError("hook input must be a JSON object")
+        tool_name = data.get("tool_name", data.get("toolName", ""))
+        if not isinstance(tool_name, str):
+            raise ValueError("tool name must be a string")
     except Exception as exc:
         print(f"[pre_tool_inspect] input parse error: {exc}", file=sys.stderr)
         sys.exit(2)
 
-    tool_name = data.get("tool_name", data.get("toolName", "")) or ""
     tool_input = data.get("tool_input", data.get("toolArgs", {}))
 
     def block(reason: str) -> None:
@@ -191,6 +207,8 @@ def main() -> None:
             block("tool arguments must contain valid JSON")
     if not isinstance(tool_input, dict):
         block("tool arguments must be a JSON object")
+    if has_invalid_command_type(tool_input):
+        block("tool argument command must be a string")
 
     if looks_like_shell_tool(tool_name, tool_input):
         shell_commands = collect_keyed_strings(tool_input, {"command"})

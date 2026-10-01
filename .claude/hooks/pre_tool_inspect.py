@@ -108,12 +108,20 @@ def main() -> None:
     try:
         sys.stdin.reconfigure(encoding="utf-8", errors="strict")
         data = json.load(sys.stdin)
+        if not isinstance(data, dict):
+            raise ValueError("hook input must be a JSON object")
+        tool = data.get("tool_name", "")
+        inp = data.get("tool_input", {})
+        if not isinstance(tool, str):
+            raise ValueError("tool name must be a string")
+        if not isinstance(inp, dict):
+            raise ValueError("tool arguments must be a JSON object")
+        for key in ("command", "file_path", "path", "content", "new_string", "new_content"):
+            if inp.get(key) is not None and not isinstance(inp[key], str):
+                raise ValueError(f"tool argument {key} must be a string")
     except Exception as e:
         print(f"[pre_tool_inspect] input parse error: {e}", file=sys.stderr)
         sys.exit(2)
-
-    tool: str = data.get("tool_name", "")
-    inp: dict = data.get("tool_input", {}) or {}
 
     def block(reason: str) -> None:
         audit_log("PRE", tool, "BLOCKED", reason)
