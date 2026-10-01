@@ -7,9 +7,11 @@ Use --inspection-only to skip filesystem-based audit log tests.
 """
 import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
+from unittest.mock import mock_open, patch
 
 os.environ["HOOK_NO_LOG"] = "1"  # Suppress audit log writes during tests
 
@@ -17,12 +19,14 @@ PRE_HOOK  = [sys.executable, ".github/hooks/pre_tool_inspect.py"]
 POST_HOOK = [sys.executable, ".github/hooks/post_tool_inspect.py"]
 
 
-def run(hook: list[str], payload: dict, extra_env: dict[str, str] | None = None) -> tuple[int, str]:
+def run(hook: list[str], payload: dict | bytes, extra_env: dict[str, str] | None = None) -> tuple[int, str]:
     env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     if extra_env:
         env.update(extra_env)
-    result = subprocess.run(hook, input=json.dumps(payload), capture_output=True, text=True, env=env)
-    return result.returncode, result.stderr.strip()
+    raw_input = payload if isinstance(payload, bytes) else json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    result = subprocess.run(hook, input=raw_input, capture_output=True, env=env, timeout=10)
+    return result.returncode, result.stderr.decode("utf-8").strip()
 
 
 def read_text(path: str) -> str:
@@ -122,11 +126,49 @@ for desc, payload, expect_flagged in pre_cases:
 
 for desc, payload, expect_flagged in post_cases:
     code, message = run(POST_HOOK, payload)
-    flagged = code == 2
-    status = "OK" if flagged == expect_flagged else "FAIL"
+    status = "OK" if code == (2 if expect_flagged else 0) else "FAIL"
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {message}" if message else ""))
+
+for hook_dir in (".claude/hooks", ".github/hooks"):
+    for phase in ("pre", "post"):
+        hook_path = f"{hook_dir}/{phase}_tool_inspect.py"
+        hook = [sys.executable, "-B", hook_path]
+        for encoding in ("cp932", "utf-8"):
+            runtime_env = {"PYTHONUTF8": "0", "PYTHONIOENCODING": f"{encoding}:surrogateescape"}
+            for label, text, expected in (
+                ("Japanese", "\u65e5\u672c\u8a9e", 0),
+                ("invisible Unicode", "\u65e5\u672c\u8a9e" + _zwsp, 2),
+            ):
+                payload = {"tool_name": "Bash", "tool_input": {"command": f"echo {text}"},
+                           "tool_response": {"stdout": text}}
+                code, message = run(hook, payload, runtime_env)
+                passed = code == expected
+                ok = ok and passed
+                print(f"[{'OK' if passed else 'FAIL'}] {hook_dir} {phase}: {label}, {encoding}: exit={code}")
+            for raw_input in (b"{", b"\xff"):
+                code, message = run(hook, raw_input, runtime_env)
+                expected = 2 if phase == "pre" else 1
+                passed = code == expected and "input parse error" in message
+                ok = ok and passed
+                print(f"[{'OK' if passed else 'FAIL'}] {hook_dir} {phase}: invalid input {raw_input!r}, {encoding}: exit={code}")
+
+        namespace = runpy.run_path(hook_path)
+        encoded_records = []
+        mocked_open = mock_open()
+
+        def encode_record(text: str) -> int:
+            options = mocked_open.call_args.kwargs
+            encoded_records.append(text.encode(options["encoding"], errors=options.get("errors", "strict")))
+            return len(text)
+
+        mocked_open.return_value.write.side_effect = encode_record
+        with patch.dict(os.environ, {"HOOK_NO_LOG": ""}), patch("os.makedirs"), patch("builtins.open", mocked_open):
+            namespace["audit_log"]("PRE" if phase == "pre" else "POST", "Bash", "ALLOWED", "\ud800")
+        passed = len(encoded_records) == 1 and b"\\ud800" in encoded_records[0]
+        ok = ok and passed
+        print(f"[{'OK' if passed else 'FAIL'}] {hook_dir} {phase}: surrogate audit record (memory only)")
 
 if "--inspection-only" in sys.argv:
     sys.exit(0 if ok else 1)

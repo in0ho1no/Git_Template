@@ -63,7 +63,7 @@ def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
     try:
         log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as f:
+        with open(log_path, "a", encoding="utf-8", errors="backslashreplace") as f:
             f.write(line)
     except OSError as exc:
         print(f"[audit_log] write failed: {exc}", file=sys.stderr)
@@ -103,12 +103,14 @@ def _invisible_chars_desc(text: str) -> str:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
     try:
+        sys.stdin.reconfigure(encoding="utf-8", errors="strict")
         data = json.load(sys.stdin)
     except Exception as e:
-        # Don't block on hook input failure; surface non-blocking error.
         print(f"[pre_tool_inspect] input parse error: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(2)
 
     tool: str = data.get("tool_name", "")
     inp: dict = data.get("tool_input", {}) or {}
