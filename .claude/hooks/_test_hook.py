@@ -3,6 +3,8 @@
 Smoke tests for pre_tool_inspect.py and post_tool_inspect.py.
 This script only passes JSON strings to the hooks for regex inspection.
 No actual commands are executed.
+Use --inspection-only to skip filesystem-based audit log tests.
+Shared encoding and root-resolution tests also run from .github/hooks/_test_hook.py.
 """
 import json
 import os
@@ -17,10 +19,12 @@ POST_HOOK = [sys.executable, ".claude/hooks/post_tool_inspect.py"]
 
 def run(hook: list[str], payload: dict, extra_env: dict[str, str] | None = None) -> tuple[int, str]:
     env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     if extra_env:
         env.update(extra_env)
-    result = subprocess.run(hook, input=json.dumps(payload), capture_output=True, text=True, env=env)
-    return result.returncode, result.stderr.strip()
+    raw_input = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    result = subprocess.run(hook, input=raw_input, capture_output=True, env=env, timeout=10)
+    return result.returncode, result.stderr.decode("utf-8").strip()
 
 
 def read_text(path: str) -> str:
@@ -94,19 +98,20 @@ post_cases = [
 ok = True
 for desc, payload, expect_flagged in pre_cases:
     code, msg = run(PRE_HOOK, payload)
-    flagged = (code == 2)
-    status = "OK" if flagged == expect_flagged else "FAIL"
+    status = "OK" if code == (2 if expect_flagged else 0) else "FAIL"
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {msg}" if msg else ""))
 
 for desc, payload, expect_flagged in post_cases:
     code, msg = run(POST_HOOK, payload)
-    flagged = (code == 2)
-    status = "OK" if flagged == expect_flagged else "FAIL"
+    status = "OK" if code == (2 if expect_flagged else 0) else "FAIL"
     if status == "FAIL":
         ok = False
     print(f"[{status}] {desc}: exit={code}" + (f" | {msg}" if msg else ""))
+
+if "--inspection-only" in sys.argv:
+    sys.exit(0 if ok else 1)
 
 with tempfile.TemporaryDirectory() as temp_dir:
     log_path = os.path.join(temp_dir, "audit.log")
@@ -116,7 +121,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
         {"HOOK_NO_LOG": "", "HOOK_LOG_PATH": log_path},
     )
     log_text = read_text(log_path) if code == 0 else ""
-    passed = code == 0 and "cmd:gh" in log_text and "supersecret" not in log_text and "GH_TOKEN=" not in log_text
+    passed = code == 0 and "cmd:[REDACTED]" in log_text and "supersecret" not in log_text and "GH_TOKEN=" not in log_text
     status = "OK" if passed else "FAIL"
     if status == "FAIL":
         ok = False

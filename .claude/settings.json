@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/entrypoint.py\" pre"
+            "command": "python -c \"import os, subprocess, sys; root=os.getenv('CLAUDE_PROJECT_DIR'); sys.exit(0) if not root else sys.exit(subprocess.call([sys.executable, os.path.join(root, '.claude', 'hooks', 'entrypoint.py'), sys.argv[1]]))\" pre"
           }
         ]
       }
@@ -86,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/entrypoint.py\" post"
+            "command": "python -c \"import os, subprocess, sys; root=os.getenv('CLAUDE_PROJECT_DIR'); sys.exit(0) if not root else sys.exit(subprocess.call([sys.executable, os.path.join(root, '.claude', 'hooks', 'entrypoint.py'), sys.argv[1]]))\" post"
           }
         ]
       }

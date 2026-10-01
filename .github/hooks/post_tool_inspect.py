@@ -90,14 +90,14 @@ def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
     if os.environ.get("HOOK_NO_LOG"):
         return
     ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    line = f"{ts} [{phase:<4}] {result:<8} {tool:<20} {detail[:120]}\n"
+    line = f"{ts} [{phase:<4}] {result:<8} {detail[:120]}\n"
     try:
         log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as f:
+        with open(log_path, "a", encoding="utf-8", errors="backslashreplace") as f:
             f.write(line)
-    except OSError as exc:
-        print(f"[audit_log] write failed: {exc}", file=sys.stderr)
+    except OSError:
+        print("[audit_log] write failed: details redacted", file=sys.stderr)
 
 
 def has_explanatory_context(text: str, start: int, end: int) -> bool:
@@ -147,14 +147,22 @@ def extract_text(value: Any) -> str:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
     try:
+        sys.stdin.reconfigure(encoding="utf-8", errors="strict")
         data = json.load(sys.stdin)
-    except Exception as e:
-        print(f"[post_tool_inspect] input parse error: {e}", file=sys.stderr)
+        if not isinstance(data, dict):
+            raise ValueError("hook input must be a JSON object")
+        tool_name = data.get("tool_name", data.get("toolName", ""))
+        if not isinstance(tool_name, str):
+            raise ValueError("tool name must be a string")
+    except Exception:
+        print("[post_tool_inspect] input parse error: invalid hook input", file=sys.stderr)
         sys.exit(1)
 
-    tool_name: str = data.get("tool_name", "") or ""
-    output = extract_text(data.get("tool_response", {}))
+    tool_response = data.get("tool_response", data.get("toolResult", data.get("tool_result", {})))
+    output = extract_text(tool_response)
 
     if not output:
         sys.exit(0)
@@ -167,19 +175,19 @@ def main() -> None:
     invis = INVISIBLE_CHAR_RE.findall(output)
     if invis:
         chars = ", ".join(sorted({f"U+{ord(c):04X}" for c in invis}))
-        warn(f"invisible Unicode chars in {tool_name} output ({chars}, {len(invis)} occurrences)")
+        warn(f"invisible Unicode chars in tool output ({chars}, {len(invis)} occurrences)")
 
     for pat, label in INJECTION_PATTERNS:
         for match in re.finditer(pat, output, flags=re.IGNORECASE):
             if has_explanatory_context(output, match.start(), match.end()):
                 continue
-            warn(f"potential injection in {tool_name} output [{label}]")
+            warn(f"potential injection in tool output [{label}]")
 
     for pat, label, allow_placeholder_skip in SENSITIVE_DATA_PATTERNS:
         for match in re.finditer(pat, output):
             if allow_placeholder_skip and has_secret_placeholder_context(output, match.start(), match.end()):
                 continue
-            warn(f"potential {label} in {tool_name} output")
+            warn(f"potential {label} in tool output")
 
     audit_log("POST", tool_name, "ALLOWED")
     sys.exit(0)

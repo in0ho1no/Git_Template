@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unified entrypoint for GitHub Code Scanning hooks.
+Unified entrypoint for GitHub Copilot hooks.
 
 This wrapper makes the hook set easier to copy to another repository by:
 - resolving the repository root from the hook location
@@ -20,7 +20,7 @@ def find_repo_root(start_dir: Path) -> Path:
     for candidate in [current, *current.parents]:
         if (candidate / ".git").exists():
             return candidate
-    return start_dir.parents[2]
+    return start_dir.parents[1]
 
 
 def main() -> None:

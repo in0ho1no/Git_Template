@@ -20,10 +20,13 @@ def find_repo_root(start_dir: Path) -> Path:
     for candidate in [current, *current.parents]:
         if (candidate / ".git").exists():
             return candidate
-    return start_dir.parents[2]
+    return start_dir.parents[1]
 
 
 def main() -> None:
+    if not os.environ.get("CLAUDE_PROJECT_DIR"):
+        return
+
     if len(sys.argv) != 2 or sys.argv[1] not in {"pre", "post"}:
         print("Usage: entrypoint.py [pre|post]", file=sys.stderr)
         sys.exit(1)
