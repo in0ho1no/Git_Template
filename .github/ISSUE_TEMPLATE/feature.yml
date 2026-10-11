@@ -1,0 +1,80 @@
+name: Feature
+description: 新しい機能・振る舞いの追加を提案する
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        振る舞いが変わらない作業 (リファクタ・ドキュメント・CI 等) は Task で起票してください。
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景・課題
+      description: なぜ必要か
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+      description: 何を実現するか
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: 検証可能な条件をチェックリストで
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: 破壊的変更
+      options:
+        - なし
+        - あり
+        - 不明
+    validations:
+      required: true
+  - type: dropdown
+    id: dependencies
+    attributes:
+      label: 依存パッケージの追加
+      options:
+        - なし
+        - あり
+        - 不明
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: 影響しそうなファイル・機能
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: 参考リンク・代替案など (簡潔に)
+  - type: dropdown
+    id: reporter
+    attributes:
+      label: 起票者
+      options:
+        - 人
+        - AI
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 起票前の確認
+      options:
+        - label: 既存 Issue に重複がないか検索した
+          required: true
+        - label: トークン・パスワード等の機密情報を伏字化した
+          required: true

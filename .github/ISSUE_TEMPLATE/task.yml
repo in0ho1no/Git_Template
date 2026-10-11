@@ -1,0 +1,76 @@
+name: Task
+description: 振る舞いを変えない作業 (リファクタ・ドキュメント・CI・設定など) を起票する
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        振る舞いが変わる場合は Bug または Feature で起票してください。
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 種別
+      options:
+        - リファクタ
+        - ドキュメント
+        - CI・ワークフロー
+        - 設定・開発フロー
+        - hooks・skills
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: なぜやるか
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: 作業内容
+      description: 何をやるか
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: behavior-change
+    attributes:
+      label: 振る舞いの変化
+      options:
+        - なし
+        - あり (Bug / Feature での起票を検討)
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 対象範囲
+      description: 対象のファイル・ディレクトリ
+  - type: dropdown
+    id: reporter
+    attributes:
+      label: 起票者
+      options:
+        - 人
+        - AI
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 起票前の確認
+      options:
+        - label: 既存 Issue に重複がないか検索した
+          required: true
+        - label: トークン・パスワード等の機密情報を伏字化した
+          required: true

@@ -1,0 +1,2 @@
+# contact_links は絶対 URL しか書けず、テンプレートから作成した別リポジトリで URL がずれるため置かない
+blank_issues_enabled: false

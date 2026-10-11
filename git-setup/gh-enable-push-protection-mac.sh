@@ -9,7 +9,8 @@ echo ""
 
 
 # ---------------------------------------------------
-# 目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化する。
+# 目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化し、
+#       Dependabot / Issue Template が使うラベルを作成する。
 # 概要: テンプレートから作成したリポジトリには設定が引き継がれないため、
 #       リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。
 # 補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。
@@ -26,36 +27,43 @@ if [ -z "$repo" ]; then
   exit 1
 fi
 
-echo "[設定] $repo の dependencies ラベルを作成/更新します"
-label_exists=$(gh api "repos/$repo/labels/dependencies" >/dev/null 2>&1 && printf '1' || true)
+# 引数: $1=ラベル名 $2=色 $3=説明
+ensure_label() {
+  echo "[設定] $repo の $1 ラベルを作成/更新します"
+  if ! gh api "repos/$repo/labels/$1" >/dev/null 2>&1; then
+    if ! gh label create "$1" --repo "$repo" --color "$2" --description "$3"; then
+      echo "[エラー] $1 ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+      exit 1
+    fi
+    return 0
+  fi
 
-if [ -n "$label_exists" ]; then
   while :; do
-    printf "dependencies ラベルは既に存在します。色と説明を上書きしますか? [y/n] "
+    printf "%s ラベルは既に存在します。色と説明を上書きしますか? [y/n] " "$1"
     read -r answer
     case "$answer" in
       y|Y)
-        if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update" --force; then
-          echo "[エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+        if ! gh label create "$1" --repo "$repo" --color "$2" --description "$3" --force; then
+          echo "[エラー] $1 ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
           exit 1
         fi
-        break
+        return 0
         ;;
       n|N|"")
-        echo "[スキップ] dependencies ラベルの更新を見送りました。"
-        break
+        echo "[スキップ] $1 ラベルの更新を見送りました。"
+        return 0
         ;;
       *)
         echo "y か n で入力してください。" >&2
         ;;
     esac
   done
-else
-  if ! gh label create dependencies --repo "$repo" --color 0366d6 --description "Dependabot update"; then
-    echo "[エラー] dependencies ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
-    exit 1
-  fi
-fi
+}
+
+# ラベルは Dependabot と Issue Template が付与する。存在しないラベルは付与されないため事前に用意する
+ensure_label dependencies 0366d6 "Dependabot update"
+ensure_label task c5def5 "Work without behavior change"
+ensure_label ai-reported 8a63d2 "Filed by an AI agent"
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ruleset_file="$script_dir/gh-RequiredCI.json"
