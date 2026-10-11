@@ -10,10 +10,11 @@ echo.
 
 rem "---------------------------------------------------"
 rem "目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化し、"
-rem "      Dependabot / Issue Template が使うラベルを作成する。"
+rem "      Dependabot / Issue Template が使うラベルの作成と Private vulnerability reporting の有効化を行う。"
 rem "概要: テンプレートから作成したリポジトリには設定が引き継がれないため、"
 rem "      リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。"
 rem "補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。"
+rem "      Private vulnerability reporting は公開リポジトリのみ対応のため、失敗しても中断せず警告に留める。"
 rem "---------------------------------------------------"
 
 where gh > nul 2> nul
@@ -90,9 +91,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [設定] %REPO% の Private vulnerability reporting を有効化します
+gh api -X PUT "repos/%REPO%/private-vulnerability-reporting" --silent
+if errorlevel 1 (
+  echo [警告] Private vulnerability reporting の有効化に失敗しました。公開リポジトリ以外では利用できません。
+)
+
 echo [確認] 現在の設定:
 gh api "repos/%REPO%" --jq "{allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
 if defined RULESET_ID gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, enforcement, conditions, rules}"
+gh api "repos/%REPO%/private-vulnerability-reporting" --jq "{private_vulnerability_reporting: .enabled}"
 
 echo.
 pause
