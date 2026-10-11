@@ -152,14 +152,14 @@ def main() -> None:
         data = json.load(sys.stdin)
         if not isinstance(data, dict):
             raise ValueError("hook input must be a JSON object")
-        tool = data.get("tool_name", "")
+        tool = data.get("tool_name", data.get("toolName", ""))
         if not isinstance(tool, str):
             raise ValueError("tool name must be a string")
     except Exception:
         print("[post_tool_inspect] input parse error: invalid hook input", file=sys.stderr)
         sys.exit(1)
 
-    output = extract_text(data.get("tool_response", {}))
+    output = extract_text(data.get("tool_response", data.get("toolResult", data.get("tool_result", {}))))
 
     if not output:
         sys.exit(0)

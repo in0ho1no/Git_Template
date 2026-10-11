@@ -9,9 +9,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import runpy
 import sys
 from datetime import datetime, timezone
 
+
+normalize_tool_input = runpy.run_path(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "hooks", "hook_input.py")
+)["normalize_tool_input"]
 
 SHELL_TOOLS = ("Bash", "PowerShell", "Shell")
 SENSITIVE_PATH_PATTERNS = [
@@ -94,16 +99,28 @@ def main() -> None:
         data = json.load(sys.stdin)
         if not isinstance(data, dict):
             raise ValueError("hook input must be a JSON object")
-        tool = data.get("tool_name", "")
-        inp = data.get("tool_input", {})
+        tool = data.get("tool_name", data.get("toolName", ""))
         if not isinstance(tool, str):
             raise ValueError("tool name must be a string")
-        if not isinstance(inp, dict):
-            raise ValueError("tool arguments must be a JSON object")
+        argument = data.get("tool_input", data.get("toolArgs", {}))
+        is_patch = tool.rsplit(".", 1)[-1] == "apply_patch" or (
+            tool == "Edit" and isinstance(argument, str)
+            and argument.lstrip().startswith("*** Begin Patch")
+        )
+        inp = normalize_tool_input(tool, argument)
+        tool_kind = {
+            "bash": "Bash", "powershell": "PowerShell", "shell": "Shell",
+            "run_in_terminal": "Shell", "view": "Read", "read_file": "Read",
+            "create_file": "Write", "replace_string_in_file": "Edit",
+        }.get(tool.rsplit(".", 1)[-1], tool)
+        for source, target in (("filePath", "file_path"), ("newContent", "new_content")):
+            if source in inp and target not in inp:
+                inp = {**inp, target: inp[source]}
         for key in ("command", "file_path", "path", "content", "new_string", "new_content"):
             if inp.get(key) is not None and not isinstance(inp[key], str):
                 raise ValueError(f"tool argument {key} must be a string")
     except Exception:
+        audit_log("PRE", "", "BLOCKED", "invalid hook input")
         print("[pre_tool_inspect] input parse error: invalid hook input", file=sys.stderr)
         sys.exit(2)
 
@@ -113,7 +130,7 @@ def main() -> None:
         sys.exit(2)
 
     # ---- Shell command checks -------------------------------------------
-    if tool in SHELL_TOOLS:
+    if tool_kind in SHELL_TOOLS:
         cmd: str = inp.get("command", "") or ""
         normalized_cmd = normalize_path(cmd)
 
@@ -151,21 +168,30 @@ def main() -> None:
             block("shell access to secret-like path")
 
     # ---- File-path checks (defense in depth for Read/Edit/Write) --------
-    if tool in ("Read", "Edit", "Write"):
-        path: str = inp.get("file_path") or inp.get("path") or ""
+    paths = [inp.get("file_path") or inp.get("path") or ""]
+    if is_patch:
+        paths.extend(inp["patch_paths"])
+    for path in paths:
+        if INVISIBLE_CHAR_RE.search(path):
+            block("invisible Unicode chars in file path")
         normalized_path = normalize_path(path)
         for pat in SENSITIVE_PATH_PATTERNS:
             if re.search(pat, normalized_path, flags=re.IGNORECASE):
                 block("sensitive file access")
 
     # ---- Content checks for Write/Edit (exfiltration + invisible chars) -
-    if tool in ("Write", "Edit"):
+    contents = []
+    if tool_kind in ("Write", "Edit"):
         content = (
             inp.get("content")
             or inp.get("new_string")
             or inp.get("new_content")
             or ""
         )
+        contents.append(content)
+    if is_patch:
+        contents.append(inp["patch_content"])
+    for content in contents:
         for pat in SECRET_URL_PATTERNS:
             if re.search(pat, content, flags=re.IGNORECASE):
                 block("suspicious URL with credential-like data in output")
@@ -173,9 +199,9 @@ def main() -> None:
             block(f"invisible Unicode chars in written content ({_invisible_chars_desc(content)})")
 
     # ---- Audit log for allowed operations -------------------------------
-    if tool in SHELL_TOOLS:
+    if tool_kind in SHELL_TOOLS:
         detail = f"cmd:{summarize_command(inp.get('command', '') or '')}"
-    elif tool in ("Read", "Edit", "Write"):
+    elif tool_kind in ("Read", "Edit", "Write") or is_patch:
         detail = f"path:{summarize_path(inp.get('file_path') or inp.get('path') or '')}"
     else:
         detail = ""
