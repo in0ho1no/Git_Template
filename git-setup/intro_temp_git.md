@@ -68,6 +68,7 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 ただし、実際のマージは RequiredCI Ruleset などの必須チェックを通過した後にのみ行われる。
 また、auto-merge 予約後に条件を満たさない変更が push された場合は、同ワークフローが予約済みの auto-merge を解除する。
 あわせて `dependencies`(Dependabot 用)、`task`(Issue Template の Task 用)、`ai-reported`(AI が起票した Issue 用) ラベルも扱う。既に存在する場合は y/n で確認してから色と説明を上書きするため、不要な上書きを避けられる。
+Private vulnerability reporting も有効化し、`.github/SECURITY.md` から案内する非公開の脆弱性報告窓口を用意する(公開リポジトリのみ。非公開リポジトリでは警告を表示して続行する)。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
