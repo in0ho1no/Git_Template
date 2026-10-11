@@ -15,6 +15,8 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 os.environ["HOOK_NO_LOG"] = "1"  # Suppress audit log writes during tests
+# Hook paths below are repo-root relative; resolve them from this file's location so the script runs from any cwd.
+os.chdir(Path(__file__).resolve().parents[2])
 
 PRE_HOOK  = [sys.executable, ".github/hooks/pre_tool_inspect.py"]
 POST_HOOK = [sys.executable, ".github/hooks/post_tool_inspect.py"]
