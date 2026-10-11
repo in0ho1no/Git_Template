@@ -9,10 +9,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import runpy
 import sys
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
+
+normalize_tool_input = runpy.run_path(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook_input.py")
+)["normalize_tool_input"]
 
 SHELL_TOOL_HINTS = ("bash", "powershell", "shell", "terminal", "command")
 PATH_KEY_HINTS = ("path", "file", "dir", "cwd")
@@ -22,6 +27,7 @@ CONTENT_KEYS = {
     "newcontent",
     "newstring",
     "replacement",
+    "patchcontent",
 }
 SENSITIVE_PATH_PATTERNS = [
     r"(^|/)\.env($|\.|/)",
@@ -184,13 +190,10 @@ def main() -> None:
         print(f"BLOCKED: {reason}. Remove suspicious content and retry.", file=sys.stderr)
         sys.exit(2)
 
-    if isinstance(tool_input, str):
-        try:
-            tool_input = json.loads(tool_input)
-        except json.JSONDecodeError:
-            block("tool arguments must contain valid JSON")
-    if not isinstance(tool_input, dict):
-        block("tool arguments must be a JSON object")
+    try:
+        tool_input = normalize_tool_input(tool_name, tool_input)
+    except ValueError as exc:
+        block(str(exc))
     if has_invalid_command_type(tool_input):
         block("tool argument command must be a string")
 
@@ -215,6 +218,8 @@ def main() -> None:
 
     path_candidates = collect_keyed_strings(tool_input, PATH_KEY_HINTS)
     for path in path_candidates:
+        if INVISIBLE_CHAR_RE.search(path):
+            block("invisible Unicode chars in file path")
         normalized_path = normalize_path(path)
         for pattern in SENSITIVE_PATH_PATTERNS:
             if re.search(pattern, normalized_path, flags=re.IGNORECASE):
