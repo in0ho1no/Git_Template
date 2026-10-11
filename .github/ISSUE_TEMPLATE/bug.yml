@@ -1,0 +1,78 @@
+name: Bug
+description: 期待どおりに動かない問題を報告する
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        推測と事実は分けて書いてください。トークン・パスワード等は `***REDACTED***` に置き換えてください。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が起きているかを 1〜2 文で
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する動作
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 根拠
+      description: ログ・エラー出力・`ファイル:行` など、確認できた事実
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 実行環境
+      multiple: true
+      options:
+        - Claude Code
+        - Claude Desktop
+        - Copilot CLI
+        - VS Code Copilot
+        - その他
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: 影響しそうなファイル・機能
+  - type: dropdown
+    id: reporter
+    attributes:
+      label: 起票者
+      options:
+        - 人
+        - AI
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 起票前の確認
+      options:
+        - label: 既存 Issue に重複がないか検索した
+          required: true
+        - label: トークン・パスワード等の機密情報を伏字化した
+          required: true
