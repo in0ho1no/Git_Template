@@ -9,7 +9,8 @@ echo.
 
 
 rem "---------------------------------------------------"
-rem "目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化する。"
+rem "目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化し、"
+rem "      Dependabot / Issue Template が使うラベルを作成する。"
 rem "概要: テンプレートから作成したリポジトリには設定が引き継がれないため、"
 rem "      リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。"
 rem "補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。"
@@ -30,31 +31,13 @@ if not defined REPO (
   exit /b 1
 )
 
-echo [設定] %REPO% の dependencies ラベルを作成/更新します
-set LABEL_EXISTS=
-gh api "repos/%REPO%/labels/dependencies" >nul 2>nul
-if not errorlevel 1 set LABEL_EXISTS=1
-
-if defined LABEL_EXISTS (
-  choice /c YN /m "dependencies ラベルは既に存在します。色と説明を上書きしますか?"
-  if errorlevel 2 (
-    echo [スキップ] dependencies ラベルの更新を見送りました。
-  ) else (
-    gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update" --force
-    if errorlevel 1 (
-      echo [エラー] dependencies ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。
-      pause
-      exit /b 1
-    )
-  )
-) else (
-  gh label create dependencies --repo "%REPO%" --color 0366d6 --description "Dependabot update"
-  if errorlevel 1 (
-    echo [エラー] dependencies ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。
-    pause
-    exit /b 1
-  )
-)
+rem ラベルは Dependabot と Issue Template が付与する。存在しないラベルは付与されないため事前に用意する
+call :ensure_label dependencies 0366d6 "Dependabot update"
+if errorlevel 1 exit /b 1
+call :ensure_label task c5def5 "Work without behavior change"
+if errorlevel 1 exit /b 1
+call :ensure_label ai-reported 8a63d2 "Filed by an AI agent"
+if errorlevel 1 exit /b 1
 
 set RULESET_FILE=%~dp0gh-RequiredCI.json
 if not exist "%RULESET_FILE%" (
@@ -113,3 +96,35 @@ if defined RULESET_ID gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, e
 
 echo.
 pause
+exit /b 0
+
+
+rem 引数: %1=ラベル名 %2=色 %3=説明
+rem chcp 65001 下ではラベル直前の行が日本語だと call 後に読み取り位置がずれるため空行を挟む
+
+:ensure_label
+echo [設定] %REPO% の %~1 ラベルを作成/更新します
+gh api "repos/%REPO%/labels/%~1" >nul 2>nul
+if errorlevel 1 goto :ensure_label_create
+
+choice /c YN /m "%~1 ラベルは既に存在します。色と説明を上書きしますか?"
+if errorlevel 2 (
+  echo [スキップ] %~1 ラベルの更新を見送りました。
+  exit /b 0
+)
+gh label create "%~1" --repo "%REPO%" --color %~2 --description "%~3" --force
+if errorlevel 1 (
+  echo [エラー] %~1 ラベルの更新に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:ensure_label_create
+gh label create "%~1" --repo "%REPO%" --color %~2 --description "%~3"
+if errorlevel 1 (
+  echo [エラー] %~1 ラベルの作成に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+exit /b 0
