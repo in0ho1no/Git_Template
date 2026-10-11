@@ -85,6 +85,13 @@ chmod +x git-setup/hooks/<hook-name>
 
 - setup 実行済みでも、hook 追加後は `git-setup/check-setup-mac.sh` または `git-setup/check-setup-win.bat` で設定状態を再確認する。
 
+### Windows バッチ (.bat) の編集ルール
+
+- `chcp 65001` を実行する `.bat` では、処理の途中に日本語の `rem` 行を置かない。cmd の読み取り位置がずれ、`'�...' is not recognized as an internal or external command` のエラーになることがある。
+- 説明コメントは、ファイル先頭の `rem "..."` 形式の説明欄にまとめる。この形式ではエラーは確認されていない。
+- `call` / `goto` 先のラベルの直前行が日本語の場合も同様にずれるため、ラベルの直前には空行を挟む。
+- 編集後は実際に実行し、上記のエラーが出ないことを確認する。
+
 ## GitHub CLI
 
 ### 本体のインストール
