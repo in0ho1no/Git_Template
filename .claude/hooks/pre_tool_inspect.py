@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 
 normalize_tool_input = runpy.run_path(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "hooks", "hook_input.py")
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook_input.py")
 )["normalize_tool_input"]
 
 SHELL_TOOLS = ("Bash", "PowerShell", "Shell")

@@ -8,6 +8,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+HOOK_DIRS = tuple(
+    hook_dir for hook_dir in (".github/hooks", ".claude/hooks")
+    if (ROOT / hook_dir).is_dir()
+)
 
 
 def make_patch(path="src\\fictional.txt", content="safe", operation="Update File"):
@@ -59,7 +63,7 @@ class HookInputTests(unittest.TestCase):
             ("removed URL", make_patch().replace("-old", "-https://example.invalid?" + "token=fictional"), 0),
             ("header-like addition", make_patch(content="*** Move to: fictional\\.env"), 0),
         ]
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             for label, patch, expected in cases:
                 with self.subTest(directory=directory, case=label, form="SDK converted Edit"):
                     self.inspect(directory, "pre", {"tool_name": "Edit", "tool_input": patch}, expected)
@@ -79,7 +83,7 @@ class HookInputTests(unittest.TestCase):
                             self.inspect(directory, "pre", payload, expected)
 
     def test_invalid_inputs_stay_blocked(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             for tool, args in [
                 ("view", "{"), ("view", "null"), ("view", "[]"), ("view", None),
                 ("Edit", "{"), ("Edit", "not a patch"), ("Edit", "[]"),
@@ -97,6 +101,8 @@ class HookInputTests(unittest.TestCase):
                     self.inspect(directory, "pre", {"toolName": tool, "toolArgs": args}, 2)
 
     def test_serialized_claude_arguments(self):
+        if ".claude/hooks" not in HOOK_DIRS:
+            self.skipTest("Claude hooks are not present")
         for tool, args, expected in [
             ("Bash", {"command": "echo safe"}, 0),
             ("Bash", {"command": "git reset --hard"}, 2),
@@ -117,7 +123,7 @@ class HookInputTests(unittest.TestCase):
                 }, expected)
 
     def test_patch_content_cannot_be_shadowed(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             with self.subTest(directory=directory):
                 self.inspect(directory, "pre", {
                     "tool_name": "apply_patch",
@@ -125,7 +131,7 @@ class HookInputTests(unittest.TestCase):
                 }, 2)
 
     def test_post_copilot_response_forms(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             for key in ("tool_response", "toolResult", "tool_result"):
                 for text, expected in [("safe", 0), ("safe" + chr(0x200B), 2)]:
                     with self.subTest(directory=directory, key=key, expected=expected):

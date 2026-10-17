@@ -1,5 +1,5 @@
 """Run privacy checks with in-memory I/O; never execute tool commands."""
-import ast
+import importlib.util
 import io
 import json
 import os
@@ -13,7 +13,18 @@ from unittest.mock import mock_open, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
+HOOK_DIRS = tuple(
+    directory for directory in (".github/hooks", ".claude/hooks")
+    if (ROOT / directory).is_dir()
+)
 SENTINEL = "fictional_private_marker_73519"
+
+
+def load_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class MemoryStream(io.StringIO):
@@ -27,8 +38,6 @@ class LogPrivacyTests(unittest.TestCase):
     def inspect(self, directory, phase, payload, expected, reason="", failure=None):
         type(self).inspections += 1
         hook_path = ROOT / directory / f"{phase}_tool_inspect.py"
-        source = hook_path.read_text(encoding="utf-8")
-        namespace = {"__name__": "privacy_test", "__file__": str(hook_path)}
         stdin = MemoryStream(json.dumps(payload))
         stdout = MemoryStream()
         stderr = MemoryStream()
@@ -48,9 +57,9 @@ class LogPrivacyTests(unittest.TestCase):
                 mkdir.side_effect = OSError(SENTINEL)
             elif failure == "parse":
                 stack.enter_context(patch("json.load", side_effect=ValueError(SENTINEL)))
-            exec(compile(source, str(hook_path), "exec"), namespace)
+            hook = load_module("privacy_test", hook_path)
             with self.assertRaises(SystemExit) as stopped:
-                namespace["main"]()
+                hook.main()
             self.assertEqual(stopped.exception.code, expected)
         records = "".join(call.args[0] for call in mocked_open.return_value.write.call_args_list)
         diagnostics = stdout.getvalue() + stderr.getvalue()
@@ -64,7 +73,7 @@ class LogPrivacyTests(unittest.TestCase):
         return records, diagnostics
 
     def test_pre_privacy_and_decisions(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             cases = [
                 ("Bash", {"command": f"git reset --hard {SENTINEL}"}, 2, "git reset --hard"),
                 ("PowerShell", {"command": f"Remove-Item -Recurse -Force C:/fictional/{SENTINEL}"}, 2, "recursive force remove"),
@@ -87,7 +96,7 @@ class LogPrivacyTests(unittest.TestCase):
                     self.inspect(directory, "pre", {"toolName": "bash", "toolArgs": json.dumps({"command": f"git reset --hard {SENTINEL}"})}, 2, "git reset --hard")
 
     def test_post_privacy_and_decisions(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             for output, expected, reason in (
                 (SENTINEL, 0, "ALLOWED"),
                 (SENTINEL + chr(0x200B), 2, "invisible Unicode"),
@@ -100,7 +109,7 @@ class LogPrivacyTests(unittest.TestCase):
                 self.inspect(directory, "post", {"toolName": SENTINEL, "toolResult": {"textResultForLlm": "password=" + SENTINEL}}, 2, "potential password")
 
     def test_errors_do_not_echo_values(self):
-        for directory in (".github/hooks", ".claude/hooks"):
+        for directory in HOOK_DIRS:
             for phase in ("pre", "post"):
                 payload = {"tool_name": "Bash", "tool_input": {"command": f"echo {SENTINEL}"}, "tool_response": {"stdout": SENTINEL}}
                 for failure in ("write", "mkdir", "parse"):
@@ -109,27 +118,11 @@ class LogPrivacyTests(unittest.TestCase):
                         self.inspect(directory, phase, payload, expected, failure=failure)
 
     def test_existing_decision_fixtures_in_memory(self):
-        fixture_names = {"_cred_url", "_basic_auth", "_zwsp", "_rlo", "_alm", "_lri", "_pdi", "pre_cases", "post_cases"}
-        for directory in (".github/hooks", ".claude/hooks"):
-            fixture_path = ROOT / directory / "_test_hook.py"
-            tree = ast.parse(fixture_path.read_text(encoding="utf-8"))
-            fixtures = []
-            for statement in tree.body:
-                if isinstance(statement, ast.Assign):
-                    names = [target.id for target in statement.targets if isinstance(target, ast.Name)]
-                    if names == ["ok"]:
-                        break
-                    if names and all(name in fixture_names for name in names):
-                        fixtures.append(statement)
-                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                    function = statement.value.func
-                    if (isinstance(function, ast.Attribute) and isinstance(function.value, ast.Name)
-                            and function.value.id == "pre_cases" and function.attr in {"extend", "append"}):
-                        fixtures.append(statement)
-            namespace = {"json": json}
-            exec(compile(ast.Module(body=fixtures, type_ignores=[]), str(fixture_path), "exec"), namespace)
+        for directory in HOOK_DIRS:
+            module_name = "fixtures_" + directory.strip(".").replace("/", "_")
+            fixtures = load_module(module_name, ROOT / directory / "_hook_fixtures.py")
             for phase in ("pre", "post"):
-                cases = namespace[f"{phase}_cases"]
+                cases = getattr(fixtures, f"{phase}_cases")
                 self.assertTrue(cases)
                 for description, payload, flagged in cases:
                     with self.subTest(directory=directory, case=description):
