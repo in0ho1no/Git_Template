@@ -12,8 +12,6 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import mock_open, patch
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 HOOK_DIRS = tuple(directory for directory in ('.github/hooks', '.claude/hooks') if (ROOT / directory).is_dir())
 SENTINEL = 'fictional_private_marker_73519'
@@ -44,13 +42,13 @@ class LogPrivacyTests(unittest.TestCase):
                 helper.configure_stream(stream, errors='backslashreplace')
                 stream.write('\ud800')
                 stream.flush()
-                assert stream.encoding == 'utf-8'
-                assert buffer.getvalue() == b'\\ud800'
+                self.assertEqual(stream.encoding, 'utf-8')
+                self.assertEqual(buffer.getvalue(), b'\\ud800')
                 helper.configure_stream(stream, errors='strict')
-                assert stream.errors == 'strict'
+                self.assertEqual(stream.errors, 'strict')
             memory_stream = MemoryStream()
             helper.configure_stream(memory_stream, errors='strict')
-            with pytest.raises(TypeError, match='must support reconfigure'):
+            with self.assertRaisesRegex(TypeError, 'must support reconfigure'):
                 helper.configure_stream(io.StringIO(), errors='strict')
 
     def inspect(
@@ -78,18 +76,18 @@ class LogPrivacyTests(unittest.TestCase):
             elif failure == 'parse':
                 stack.enter_context(patch('json.load', side_effect=ValueError(SENTINEL)))
             hook = load_module('privacy_test', hook_path)
-            with pytest.raises(SystemExit) as stopped:
+            with self.assertRaises(SystemExit) as stopped:
                 hook.main()
-            assert stopped.value.code == expected
+            self.assertEqual(stopped.exception.code, expected)
         records = ''.join(call.args[0] for call in mocked_open.return_value.write.call_args_list)
         diagnostics = stdout.getvalue() + stderr.getvalue()
-        assert SENTINEL not in records + diagnostics
-        assert stdout.getvalue() == ''
-        assert 'Traceback' not in diagnostics
+        self.assertNotIn(SENTINEL, records + diagnostics)
+        self.assertEqual(stdout.getvalue(), '')
+        self.assertNotIn('Traceback', diagnostics)
         if reason:
-            assert reason in (diagnostics if expected else records)
+            self.assertIn(reason, diagnostics if expected else records)
         if failure in ('write', 'mkdir'):
-            assert 'write failed' in diagnostics
+            self.assertIn('write failed', diagnostics)
         return records, diagnostics
 
     def test_pre_privacy_and_decisions(self) -> None:
@@ -151,7 +149,7 @@ class LogPrivacyTests(unittest.TestCase):
             fixtures = load_module(module_name, ROOT / directory / '_hook_fixtures.py')
             for phase in ('pre', 'post'):
                 cases = getattr(fixtures, f'{phase}_cases')
-                assert cases
+                self.assertTrue(cases)
                 for description, payload, flagged in cases:
                     with self.subTest(directory=directory, case=description):
                         self.inspect(directory, phase, payload, 2 if flagged else 0)

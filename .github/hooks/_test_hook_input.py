@@ -43,9 +43,9 @@ class HookInputTests(unittest.TestCase):
             timeout=10,
         )
         diagnostic = result.stderr.decode('utf-8')
-        assert result.returncode == expected, diagnostic
-        assert result.stdout == b''
-        assert 'Traceback' not in diagnostic
+        self.assertEqual(result.returncode, expected, diagnostic)
+        self.assertEqual(result.stdout, b'')
+        self.assertNotIn('Traceback', diagnostic)
         return diagnostic
 
     def test_patch_argument_forms_and_inspection(self) -> None:

@@ -13,7 +13,7 @@ import re
 import runpy
 import sys
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, NoReturn
 
 _hook_input = runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hook_input.py'))
@@ -97,7 +97,7 @@ def audit_log(phase: str, tool: str, result: str, detail: str = '') -> None:
     """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
     if os.environ.get('HOOK_NO_LOG'):
         return
-    ts = datetime.now(UTC).astimezone().isoformat(timespec='seconds')
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')
     line = f'{ts} [{phase:<4}] {result:<8} {detail[:120]}\n'
     try:
         log_path = os.path.abspath(os.environ.get('HOOK_LOG_PATH') or _DEFAULT_LOG_FILE)
