@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""
-Claude Code PreToolUse hook.
+"""Claude Code PreToolUse hook.
+
 Inspects Bash commands and file paths for dangerous patterns and
 prompt-injection-style content. Exit 2 to block (stderr -> Claude).
 """
+
 from __future__ import annotations
 
 import json
@@ -13,29 +14,28 @@ import runpy
 import sys
 from datetime import datetime, timezone
 
+_hook_input = runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hook_input.py'))
+normalize_tool_input = _hook_input['normalize_tool_input']
+configure_stream = _hook_input['configure_stream']
 
-normalize_tool_input = runpy.run_path(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook_input.py")
-)["normalize_tool_input"]
-
-SHELL_TOOLS = ("Bash", "PowerShell", "Shell")
+SHELL_TOOLS = ('Bash', 'PowerShell', 'Shell')
 SENSITIVE_PATH_PATTERNS = [
-    r"(^|/)\.env($|\.|/)",
-    r"(^|/)\.ssh/",
-    r"(^|/)\.aws/",
-    r"(^|/)\.gnupg/",
-    r"\.pem$",
-    r"\.key$",
-    r"(^|/)id_rsa($|\.pub$)",
-    r"(^|/)id_ed25519($|\.pub$)",
-    r"(^|/)credentials(\.json|\.yaml|\.yml)?$",
+    r'(^|/)\.env($|\.|/)',
+    r'(^|/)\.ssh/',
+    r'(^|/)\.aws/',
+    r'(^|/)\.gnupg/',
+    r'\.pem$',
+    r'\.key$',
+    r'(^|/)id_rsa($|\.pub$)',
+    r'(^|/)id_ed25519($|\.pub$)',
+    r'(^|/)credentials(\.json|\.yaml|\.yml)?$',
 ]
 SECRET_PATH_PATTERN = (
-    r"(\.env(\.|$|\s|/)"
-    r"|/\.ssh/|/\.aws/|/\.gnupg/"
-    r"|\.pem(\s|$)|\.key(\s|$)"
-    r"|id_rsa(\s|$|\.pub)|id_ed25519(\s|$|\.pub)"
-    r"|credentials(\.|$|\s))"
+    r'(\.env(\.|$|\s|/)'
+    r'|/\.ssh/|/\.aws/|/\.gnupg/'
+    r'|\.pem(\s|$)|\.key(\s|$)'
+    r'|id_rsa(\s|$|\.pub)|id_ed25519(\s|$|\.pub)'
+    r'|credentials(\.|$|\s))'
 )
 SECRET_URL_PATTERNS = [
     r"https?://[^\s'\"]*[?#][^\s'\"]*(token|secret|api[-_]?key|password|credential)\s*=",
@@ -43,171 +43,173 @@ SECRET_URL_PATTERNS = [
 ]
 # Glassworm: invisible/bidi control chars that can hide malicious content.
 # Built via chr() to avoid embedding actual invisible chars in this source file.
-_INVISIBLE_CODEPOINTS = (
-    [0x061C]                        # Arabic Letter Mark
-    + [0x00AD]                      # soft hyphen
-    + list(range(0x200B, 0x2010))   # ZWSP, ZWNJ, ZWJ, LRM, RLM
-    + list(range(0x202A, 0x202F))   # LRE, RLE, PDF, LRO, RLO (bidi overrides)
-    + list(range(0x2060, 0x2065))   # word joiner, invisible operators
-    + list(range(0x2066, 0x206A))   # LRI, RLI, FSI, PDI (bidi isolates)
-    + [0xFEFF]                      # BOM / ZWNBSP
-)
-INVISIBLE_CHAR_RE = re.compile(
-    "[" + "".join(chr(cp) for cp in _INVISIBLE_CODEPOINTS) + "]"
-)
+_INVISIBLE_CODEPOINTS = [
+    0x061C,  # Arabic Letter Mark
+    0x00AD,  # soft hyphen
+    *range(0x200B, 0x2010),  # ZWSP, ZWNJ, ZWJ, LRM, RLM
+    *range(0x202A, 0x202F),  # LRE, RLE, PDF, LRO, RLO (bidi overrides)
+    *range(0x2060, 0x2065),  # word joiner, invisible operators
+    *range(0x2066, 0x206A),  # LRI, RLI, FSI, PDI (bidi isolates)
+    0xFEFF,  # BOM / ZWNBSP
+]
+INVISIBLE_CHAR_RE = re.compile('[' + ''.join(chr(cp) for cp in _INVISIBLE_CODEPOINTS) + ']')
 
-_DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "audit.log")
+_DEFAULT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'audit.log')
 
 
-def audit_log(phase: str, tool: str, result: str, detail: str = "") -> None:
+def audit_log(phase: str, tool: str, result: str, detail: str = '') -> None:
     """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
-    if os.environ.get("HOOK_NO_LOG"):
+    if os.environ.get('HOOK_NO_LOG'):
         return
-    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    line = f"{ts} [{phase:<4}] {result:<8} {detail[:120]}\n"
+    # Keep compatibility with Python versions before 3.11.
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')  # noqa: UP017
+    line = f'{ts} [{phase:<4}] {result:<8} {detail[:120]}\n'
     try:
-        log_path = os.path.abspath(os.environ.get("HOOK_LOG_PATH") or _DEFAULT_LOG_FILE)
+        log_path = os.path.abspath(os.environ.get('HOOK_LOG_PATH') or _DEFAULT_LOG_FILE)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8", errors="backslashreplace") as f:
+        with open(log_path, 'a', encoding='utf-8', errors='backslashreplace') as f:
             f.write(line)
     except OSError:
-        print("[audit_log] write failed: details redacted", file=sys.stderr)
+        print('[audit_log] write failed: details redacted', file=sys.stderr)
 
 
 def summarize_path(path: str) -> str:
-    return "[REDACTED]"
+    """Redact paths before they reach the audit log."""
+    return '[REDACTED]'
 
 
 def summarize_command(command: str) -> str:
-    return "[REDACTED]"
+    """Redact commands before they reach the audit log."""
+    return '[REDACTED]'
 
 
 def normalize_path(value: str) -> str:
-    return value.replace("\\", "/")
+    """Use one separator for cross-platform path inspection."""
+    return value.replace('\\', '/')
 
 
 def _invisible_chars_desc(text: str) -> str:
-    found = sorted({f"U+{ord(c):04X}" for c in INVISIBLE_CHAR_RE.findall(text)})
-    return ", ".join(found)
+    found = sorted({f'U+{ord(c):04X}' for c in INVISIBLE_CHAR_RE.findall(text)})
+    return ', '.join(found)
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+    """Inspect tool input and exit with the hook permission result."""
+    configure_stream(sys.stdout, errors='backslashreplace')
+    configure_stream(sys.stderr, errors='backslashreplace')
     try:
-        sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+        configure_stream(sys.stdin, errors='strict')
         data = json.load(sys.stdin)
         if not isinstance(data, dict):
-            raise ValueError("hook input must be a JSON object")
-        tool = data.get("tool_name", data.get("toolName", ""))
+            raise ValueError('hook input must be a JSON object')
+        tool = data.get('tool_name', data.get('toolName', ''))
         if not isinstance(tool, str):
-            raise ValueError("tool name must be a string")
-        argument = data.get("tool_input", data.get("toolArgs", {}))
-        is_patch = tool.rsplit(".", 1)[-1] == "apply_patch" or (
-            tool == "Edit" and isinstance(argument, str)
-            and argument.lstrip().startswith("*** Begin Patch")
+            raise ValueError('tool name must be a string')
+        argument = data.get('tool_input', data.get('toolArgs', {}))
+        is_patch = tool.rsplit('.', 1)[-1] == 'apply_patch' or (
+            tool == 'Edit' and isinstance(argument, str) and argument.lstrip().startswith('*** Begin Patch')
         )
         inp = normalize_tool_input(tool, argument)
         tool_kind = {
-            "bash": "Bash", "powershell": "PowerShell", "shell": "Shell",
-            "run_in_terminal": "Shell", "view": "Read", "read_file": "Read",
-            "create_file": "Write", "replace_string_in_file": "Edit",
-        }.get(tool.rsplit(".", 1)[-1], tool)
-        for source, target in (("filePath", "file_path"), ("newContent", "new_content")):
+            'bash': 'Bash',
+            'powershell': 'PowerShell',
+            'shell': 'Shell',
+            'run_in_terminal': 'Shell',
+            'view': 'Read',
+            'read_file': 'Read',
+            'create_file': 'Write',
+            'replace_string_in_file': 'Edit',
+        }.get(tool.rsplit('.', 1)[-1], tool)
+        for source, target in (('filePath', 'file_path'), ('newContent', 'new_content')):
             if source in inp and target not in inp:
                 inp = {**inp, target: inp[source]}
-        for key in ("command", "file_path", "path", "content", "new_string", "new_content"):
+        for key in ('command', 'file_path', 'path', 'content', 'new_string', 'new_content'):
             if inp.get(key) is not None and not isinstance(inp[key], str):
-                raise ValueError(f"tool argument {key} must be a string")
+                raise ValueError(f'tool argument {key} must be a string')
     except Exception:
-        audit_log("PRE", "", "BLOCKED", "invalid hook input")
-        print("[pre_tool_inspect] input parse error: invalid hook input", file=sys.stderr)
+        audit_log('PRE', '', 'BLOCKED', 'invalid hook input')
+        print('[pre_tool_inspect] input parse error: invalid hook input', file=sys.stderr)
         sys.exit(2)
 
     def block(reason: str) -> None:
-        audit_log("PRE", tool, "BLOCKED", reason)
-        print(f"BLOCKED: {reason}. Remove suspicious content and retry.", file=sys.stderr)
+        audit_log('PRE', tool, 'BLOCKED', reason)
+        print(f'BLOCKED: {reason}. Remove suspicious content and retry.', file=sys.stderr)
         sys.exit(2)
 
     # ---- Shell command checks -------------------------------------------
     if tool_kind in SHELL_TOOLS:
-        cmd: str = inp.get("command", "") or ""
+        cmd: str = inp.get('command', '') or ''
         normalized_cmd = normalize_path(cmd)
 
         if INVISIBLE_CHAR_RE.search(cmd):
-            block(f"invisible Unicode chars in command ({_invisible_chars_desc(cmd)})")
+            block(f'invisible Unicode chars in command ({_invisible_chars_desc(cmd)})')
 
         dangerous = [
-            (r"\brm\s+-rf?\s+(/|~|\$HOME|\*)", "rm -rf against root/home/wildcard"),
-            (r"\|\s*(sh|bash|zsh)\b",          "piping into a shell"),
-            (r"\bgit\s+push\s+(--force|-f\b)", "git force-push"),
-            (r"\bgit\s+reset\s+--hard\b",      "git reset --hard"),
-            (r"\bgit\s+filter-(branch|repo)\b","git history rewrite"),
-            (r"\beval\b",                      "use of eval"),
-            (r"\bchmod\s+-?R?\s*777\b",        "chmod 777"),
-            (r":\(\)\s*\{.*:\|:&.*\}",         "fork bomb pattern"),
-            (r"\bdd\s+[^|]*\bof=/dev/",        "dd writing to device"),
-            (r">\s*/dev/sd[a-z]",              "raw disk write"),
+            (r'\brm\s+-rf?\s+(/|~|\$HOME|\*)', 'rm -rf against root/home/wildcard'),
+            (r'\|\s*(sh|bash|zsh)\b', 'piping into a shell'),
+            (r'\bgit\s+push\s+(--force|-f\b)', 'git force-push'),
+            (r'\bgit\s+reset\s+--hard\b', 'git reset --hard'),
+            (r'\bgit\s+filter-(branch|repo)\b', 'git history rewrite'),
+            (r'\beval\b', 'use of eval'),
+            (r'\bchmod\s+-?R?\s*777\b', 'chmod 777'),
+            (r':\(\)\s*\{.*:\|:&.*\}', 'fork bomb pattern'),
+            (r'\bdd\s+[^|]*\bof=/dev/', 'dd writing to device'),
+            (r'>\s*/dev/sd[a-z]', 'raw disk write'),
             (
-                r"\bremove-item\b(?=[^\n\r]*\s-(recurse|r)\b)"
-                r"(?=[^\n\r]*\s-(force|fo)\b)[^\n\r]*(?:[a-z]:/|/|~|\$HOME|\*)",
-                "powershell recursive force remove",
+                r'\bremove-item\b(?=[^\n\r]*\s-(recurse|r)\b)'
+                r'(?=[^\n\r]*\s-(force|fo)\b)[^\n\r]*(?:[a-z]:/|/|~|\$HOME|\*)',
+                'powershell recursive force remove',
             ),
-            (r"\b(del|erase)\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)", "cmd recursive quiet delete"),
-            (r"\brmdir\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)", "cmd recursive quiet directory delete"),
+            (r'\b(del|erase)\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)', 'cmd recursive quiet delete'),
+            (r'\brmdir\b(?=[^\n\r]*\s/s\b)(?=[^\n\r]*\s/q\b)', 'cmd recursive quiet directory delete'),
         ]
         for pat, label in dangerous:
             if re.search(pat, normalized_cmd, flags=re.IGNORECASE):
                 block(label)
 
         readers = (
-            r"\b(cat|less|more|head|tail|cp|mv|grep|awk|sed|od|xxd|base64|tar|zip|"
-            r"get-content|gc|type|copy-item|move-item)\b"
+            r'\b(cat|less|more|head|tail|cp|mv|grep|awk|sed|od|xxd|base64|tar|zip|'
+            r'get-content|gc|type|copy-item|move-item)\b'
         )
-        if re.search(readers + r"[^|;&]*" + SECRET_PATH_PATTERN, normalized_cmd, flags=re.IGNORECASE):
-            block("shell access to secret-like path")
+        if re.search(readers + r'[^|;&]*' + SECRET_PATH_PATTERN, normalized_cmd, flags=re.IGNORECASE):
+            block('shell access to secret-like path')
 
     # ---- File-path checks (defense in depth for Read/Edit/Write) --------
-    paths = [inp.get("file_path") or inp.get("path") or ""]
+    paths = [inp.get('file_path') or inp.get('path') or '']
     if is_patch:
-        paths.extend(inp["patch_paths"])
+        paths.extend(inp['patch_paths'])
     for path in paths:
         if INVISIBLE_CHAR_RE.search(path):
-            block("invisible Unicode chars in file path")
+            block('invisible Unicode chars in file path')
         normalized_path = normalize_path(path)
         for pat in SENSITIVE_PATH_PATTERNS:
             if re.search(pat, normalized_path, flags=re.IGNORECASE):
-                block("sensitive file access")
+                block('sensitive file access')
 
     # ---- Content checks for Write/Edit (exfiltration + invisible chars) -
     contents = []
-    if tool_kind in ("Write", "Edit"):
-        content = (
-            inp.get("content")
-            or inp.get("new_string")
-            or inp.get("new_content")
-            or ""
-        )
+    if tool_kind in ('Write', 'Edit'):
+        content = inp.get('content') or inp.get('new_string') or inp.get('new_content') or ''
         contents.append(content)
     if is_patch:
-        contents.append(inp["patch_content"])
+        contents.append(inp['patch_content'])
     for content in contents:
         for pat in SECRET_URL_PATTERNS:
             if re.search(pat, content, flags=re.IGNORECASE):
-                block("suspicious URL with credential-like data in output")
+                block('suspicious URL with credential-like data in output')
         if INVISIBLE_CHAR_RE.search(content):
-            block(f"invisible Unicode chars in written content ({_invisible_chars_desc(content)})")
+            block(f'invisible Unicode chars in written content ({_invisible_chars_desc(content)})')
 
     # ---- Audit log for allowed operations -------------------------------
     if tool_kind in SHELL_TOOLS:
-        detail = f"cmd:{summarize_command(inp.get('command', '') or '')}"
-    elif tool_kind in ("Read", "Edit", "Write") or is_patch:
-        detail = f"path:{summarize_path(inp.get('file_path') or inp.get('path') or '')}"
+        detail = f'cmd:{summarize_command(inp.get("command", "") or "")}'
+    elif tool_kind in ('Read', 'Edit', 'Write') or is_patch:
+        detail = f'path:{summarize_path(inp.get("file_path") or inp.get("path") or "")}'
     else:
-        detail = ""
-    audit_log("PRE", tool, "ALLOWED", detail)
+        detail = ''
+    audit_log('PRE', tool, 'ALLOWED', detail)
     sys.exit(0)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
