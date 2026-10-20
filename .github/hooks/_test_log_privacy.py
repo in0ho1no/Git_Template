@@ -1,5 +1,8 @@
 """Run privacy checks with in-memory I/O; never execute tool commands."""
 
+# Keep these tests runnable without pytest.
+# ruff: noqa: PT009, PT027
+
 import importlib.util
 import io
 import json

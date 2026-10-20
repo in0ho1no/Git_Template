@@ -89,7 +89,8 @@ def audit_log(phase: str, tool: str, result: str, detail: str = '') -> None:
     """Append one audit record. No-ops when HOOK_NO_LOG is set or write fails."""
     if os.environ.get('HOOK_NO_LOG'):
         return
-    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')
+    # Keep compatibility with Python versions before 3.11.
+    ts = datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')  # noqa: UP017
     line = f'{ts} [{phase:<4}] {result:<8} {detail[:120]}\n'
     try:
         log_path = os.path.abspath(os.environ.get('HOOK_LOG_PATH') or _DEFAULT_LOG_FILE)

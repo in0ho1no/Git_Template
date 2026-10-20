@@ -1,5 +1,8 @@
 """Check argument compatibility through the real entrypoints, without tool execution."""
 
+# Keep these tests runnable without pytest.
+# ruff: noqa: PT009
+
 import json
 import os
 import subprocess
