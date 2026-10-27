@@ -75,6 +75,10 @@ Push protection は push に含まれる機密情報の検出・流出防止を�
 
 定義と Windows 用スクリプトのモックテストは `python -B git-setup\test_branch_protection.py` で実行できる。Windows 用の実行テストでは、Windows PowerShell で生成した `gh.exe` モックを使い、両 Ruleset の作成・更新とエラー時の中断を検証する。GitHub への通信や設定変更は行わない。Windows 以外では実行テストをスキップし、定義のみ検証する。このテストは GitHub 上の設定や PR の実動作を確認するものではない。
 
+[Branch Protection Tests](../.github/workflows/branch-protection-tests.yml) は、テンプレート本体の `in0ho1no/Git_Template` だけでこのテストを自動実行する。`main` / `develop` 向けの PR と両ブランチへの push のうち、`git-setup/**`、この Workflow、`security-scan.yml`、`.gitattributes` のいずれかに変更があった場合が対象となる。GitHub Actions の画面から手動実行もできる。`windows-latest` に備わる Python と Windows PowerShell を使用し、テスト失敗時はチェックが失敗する。
+
+派生リポジトリには Workflow ファイルもコピーされるが、リポジトリ名の条件でジョブをスキップするため、Windows runner でのテスト実行は発生しない。Ruleset の必須チェックには追加しないため、派生先でこのテストの成功を要求することはない。テンプレート本体のリポジトリ名を変更した場合は Workflow の条件も更新する。
+
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。
 

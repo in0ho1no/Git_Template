@@ -1,0 +1,38 @@
+name: Branch Protection Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'git-setup/**'
+      - '.github/workflows/branch-protection-tests.yml'
+      - '.github/workflows/security-scan.yml'
+      - '.gitattributes'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'git-setup/**'
+      - '.github/workflows/branch-protection-tests.yml'
+      - '.github/workflows/security-scan.yml'
+      - '.gitattributes'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  branch-protection-tests:
+    name: branch-protection-tests
+    if: github.repository == 'in0ho1no/Git_Template'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Run branch protection tests
+        run: python -B git-setup\test_branch_protection.py
