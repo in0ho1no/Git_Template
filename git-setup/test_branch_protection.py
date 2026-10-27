@@ -180,6 +180,12 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             "Save gh-enable-push-protection-win.bat with CRLF line endings."
         )
 
+    def test_batch_messages_are_quoted_data(self):
+        script = (SETUP / "gh-enable-push-protection-win.bat").read_text(encoding="utf-8")
+        for line in script.splitlines():
+            if re.match(r"\s*@?echo(?:[ (]|$)", line):
+                self.assertTrue(line.isascii(), "Use quoted FOR data for Japanese messages.")
+
     def test_windows_creates_and_updates_both_rulesets(self):
         for existing, method in (("0", "POST"), ("1", "PUT")):
             with self.subTest(existing=existing):

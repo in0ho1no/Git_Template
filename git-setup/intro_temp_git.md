@@ -97,7 +97,8 @@ Push protection は push に含まれる機密情報の検出・流出防止を�
 ### Windows バッチ (.bat) の編集ルール
 
 - 日本語を含む `.bat` は UTF-8・CRLF で保存する。VS Code の右下で改行コードが `CRLF` であることを確認する。`.gitattributes` でも CRLF を指定しているが、編集時やファイルの受け渡しで LF になる場合がある。
-- UTF-8・LF のバッチでは、`call` などの処理後に日本語メッセージの一部がコマンドとして誤解釈され、文字化けと `is not recognized as an internal or external command` が出ることを確認している。この英語はスクリプトの案内ではなく `cmd.exe` のエラーであり、CRLF に直して保存する必要がある。
+- UTF-8・CRLF でも、コンソールでの実行時に引用符のない日本語の `echo` 行の一部がコマンドとして誤解釈され、文字化けと `is not recognized as an internal or external command` が出る場合がある。この英語はスクリプトの案内ではなく `cmd.exe` のエラーであり、CRLF で保存し直すだけでは解消しない。
+- GitHub 初期設定スクリプトの日本語表示は `for %%M in ("メッセージ") do echo(%%~M` に統一する。引用符内のデータとして扱い、表示時に引用符を外す。出力をパイプで取り込むテストだけでは上記の問題を見逃すため、コンソールでの実行も確認する。
 - `chcp 65001` を実行する `.bat` では、処理の途中に日本語の `rem` 行を置かない。cmd の読み取り位置がずれ、`'�...' is not recognized as an internal or external command` のエラーになることがある。
 - 説明コメントは、ファイル先頭の `rem "..."` 形式の説明欄にまとめる。この形式ではエラーは確認されていない。
 - `call` / `goto` 先のラベルの直前行が日本語の場合も同様にずれるため、ラベルの直前には空行を挟む。
