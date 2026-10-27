@@ -249,7 +249,12 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                             calls.index("<default_branch=develop>"))
             self.assertLess(calls.index("<security_and_analysis[secret_scanning][status]=enabled>"),
                             calls.index("<default_branch=develop>"))
-            self.assertIn(f"cwd={root}", calls)
+            working_directories = [
+                line[4:] for line in calls.splitlines()
+                if line.startswith("cwd=")
+            ]
+            self.assertEqual(len(working_directories), 1)
+            self.assertTrue(os.path.samefile(root, working_directories[0]))
 
     def test_windows_skips_both_develop_changes_when_branch_is_absent(self):
         for with_config in (True, False):
