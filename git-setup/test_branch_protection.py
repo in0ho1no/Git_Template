@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,38 +12,62 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "git-setup"
 MOCK_GH = r'''
-gh() {
-  printf 'GH:' >&2
-  printf ' <%s>' "$@" >&2
-  printf '\n' >&2
-  case "$1 $2" in
-    "repo view") echo example/repo ;;
-    "label create") return 0 ;;
-    "api "*)
-      case "$2" in
-        */labels/*) return 1 ;;
-        *rulesets\?*)
-          [ "$MOCK_FAIL" = list ] && return 1
-          if [ "$MOCK_EXISTING" = 1 ]; then
-            case "$*" in *MainProtection*) echo 102 ;; *) echo 101 ;; esac
-          fi
-          ;;
-        -X)
-          [ "$MOCK_FAIL" = apply ] && return 1
-          case "$*" in *gh-MainProtection.json*) echo 102 ;; *) echo 101 ;; esac
-          ;;
-        */rulesets/*)
-          [ "$MOCK_FAIL" = verify ] && return 1
-          echo '{"enforcement":"active"}'
-          ;;
-        *) echo '{}' ;;
-      esac
-      ;;
-    *) return 1 ;;
-  esac
+using System;
+using System.IO;
+using System.Text;
+
+public class MockGh
+{
+    public static int Main(string[] args)
+    {
+        string command = "<" + String.Join("> <", args) + ">";
+        File.AppendAllText(
+            Environment.GetEnvironmentVariable("MOCK_LOG"),
+            command + Environment.NewLine, Encoding.UTF8);
+        if (args.Length < 2) return 1;
+        if (args[0] == "repo" && args[1] == "view")
+        {
+            Console.WriteLine("example/repo");
+            return 0;
+        }
+        if (args[0] == "label" && args[1] == "create") return 0;
+        if (args[0] != "api") return 1;
+        if (args[1].Contains("/labels/")) return 1;
+
+        string stage;
+        string name;
+        if (args[1].Contains("/rulesets?"))
+        {
+            stage = "list";
+            name = command.Contains("MainProtection") ? "MainProtection" : "RequiredCI";
+        }
+        else if (args[1] == "-X" && args.Length > 3 && args[3].Contains("/rulesets"))
+        {
+            stage = "apply";
+            name = command.Contains("gh-MainProtection.json") ? "MainProtection" : "RequiredCI";
+        }
+        else if (args[1].Contains("/rulesets/"))
+        {
+            stage = "verify";
+            name = args[1].EndsWith("/102") ? "MainProtection" : "RequiredCI";
+        }
+        else
+        {
+            Console.WriteLine("{}");
+            return 0;
+        }
+
+        string failure = Environment.GetEnvironmentVariable("MOCK_FAIL");
+        bool target = name == Environment.GetEnvironmentVariable("MOCK_TARGET");
+        if (target && failure == stage) return 1;
+        if (stage == "verify") Console.WriteLine("{\"enforcement\":\"active\"}");
+        else if (stage == "apply" && target && failure == "empty-id") return 0;
+        else if (stage == "apply" && target && failure == "null-id") Console.WriteLine("null");
+        else if (stage == "apply" || Environment.GetEnvironmentVariable("MOCK_EXISTING") == "1")
+            Console.WriteLine(name == "MainProtection" ? "102" : "101");
+        return 0;
+    }
 }
-export -f gh
-exec bash "$1"
 '''
 
 
@@ -83,46 +108,80 @@ class BranchProtectionTests(unittest.TestCase):
         for check in ("semgrep", "gitleaks"):
             self.assertRegex(workflow, rf"(?m)^    name: {check}$")
 
-    @unittest.skipUnless(shutil.which("bash"), "bash is required for script tests")
-    def test_mac_creates_and_updates_both_rulesets(self):
+
+@unittest.skipUnless(os.name == "nt", "Windows is required for batch script tests")
+class WindowsBranchProtectionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        powershell = shutil.which("powershell.exe")
+        if powershell is None:
+            raise unittest.SkipTest("Windows PowerShell is required to build the gh mock")
+        temporary = tempfile.TemporaryDirectory(prefix="branch protection ")
+        cls.addClassCleanup(temporary.cleanup)
+        cls.mock_dir = Path(temporary.name)
+        source = cls.mock_dir / "MockGh.cs"
+        source.write_text(MOCK_GH, encoding="utf-8")
+        env = os.environ.copy()
+        env.update(MOCK_SOURCE=str(source), MOCK_EXE=str(cls.mock_dir / "gh.exe"))
+        result = subprocess.run(
+            [powershell, "-NoProfile", "-NonInteractive", "-Command",
+             "$ErrorActionPreference = 'Stop'; "
+             "Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath $env:MOCK_SOURCE) "
+             "-OutputAssembly $env:MOCK_EXE -OutputType ConsoleApplication"],
+            capture_output=True, env=env, timeout=60
+        )
+        if result.returncode:
+            raise RuntimeError(f"Could not build gh mock: {result.stderr!r}")
+
+    def test_windows_creates_and_updates_both_rulesets(self):
         for existing, method in (("0", "POST"), ("1", "PUT")):
             with self.subTest(existing=existing):
-                result = self.run_mac(existing=existing)
-                self.assertEqual(result.returncode, 0, result.stderr)
+                result, calls = self.run_windows(existing=existing)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 for name, ruleset_id in (("RequiredCI", "101"), ("MainProtection", "102")):
                     endpoint = "repos/example/repo/rulesets"
                     if existing == "1":
                         endpoint += f"/{ruleset_id}"
-                    self.assertIn(f"<-X> <{method}> <{endpoint}>", result.stderr)
-                    self.assertIn(f"gh-{name}.json", result.stderr)
-                    self.assertIn(f"<repos/example/repo/rulesets/{ruleset_id}>", result.stderr)
-                self.assertIn("<--paginate> <--jq>", result.stderr)
-                self.assertIn('select(.name == "RequiredCI"', result.stderr)
-                self.assertIn('select(.name == "MainProtection"', result.stderr)
+                    self.assertIn(f"<-X> <{method}> <{endpoint}>", calls)
+                    self.assertIn(f"gh-{name}.json", calls)
+                    self.assertIn(f"<repos/example/repo/rulesets/{ruleset_id}>", calls)
+                self.assertEqual(calls.count("<-X> <POST>"), 2 if existing == "0" else 0)
+                self.assertIn("<--paginate> <--jq>", calls)
+                self.assertIn('select(.name == "RequiredCI"', calls)
+                self.assertIn('select(.name == "MainProtection"', calls)
+                self.assertIn("<-X> <PATCH> <repos/example/repo>", calls)
+                self.assertNotIn("[エラー]", result.stdout + result.stderr)
 
-    @unittest.skipUnless(shutil.which("bash"), "bash is required for script tests")
-    def test_mac_stops_on_ruleset_errors(self):
-        for failure in ("list", "apply", "verify"):
-            with self.subTest(failure=failure):
-                result = self.run_mac(failure=failure)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("[エラー]", result.stderr)
-                self.assertNotIn("<-X> <PATCH>", result.stderr)
+    def test_windows_stops_on_ruleset_errors(self):
+        for existing in ("0", "1"):
+            for target in ("RequiredCI", "MainProtection"):
+                for failure in ("list", "apply", "verify", "empty-id", "null-id"):
+                    with self.subTest(existing=existing, target=target, failure=failure):
+                        result, calls = self.run_windows(
+                            existing=existing, failure=failure, target=target
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("[エラー]", result.stdout + result.stderr)
+                        self.assertNotIn("<-X> <PATCH>", calls)
+                        if target == "RequiredCI":
+                            self.assertNotIn("MainProtection", calls)
 
-    def run_mac(self, existing="0", failure=""):
+    def run_windows(self, existing="0", failure="", target="RequiredCI"):
+        log = self.mock_dir / "calls.log"
+        log.write_text("", encoding="utf-8")
         env = os.environ.copy()
-        env.update(MOCK_EXISTING=existing, MOCK_FAIL=failure)
-        script = (SETUP / "gh-enable-push-protection-mac.sh").as_posix()
-        bash = shutil.which("bash")
-        if os.name == "nt":
-            git_bin = Path(bash).parent.parent / "usr" / "bin"
-            if (git_bin / "bash.exe").is_file():
-                env["PATH"] = str(git_bin) + os.pathsep + env["PATH"]
-                bash = str(git_bin / "bash.exe")
-        return subprocess.run(
-            [bash, "-c", MOCK_GH, "_", script],
-            capture_output=True, text=True, encoding="utf-8", env=env, timeout=30
+        env.update(
+            MOCK_EXISTING=existing, MOCK_FAIL=failure, MOCK_TARGET=target,
+            MOCK_LOG=str(log), PATH=str(self.mock_dir) + os.pathsep + env["PATH"]
         )
+        script = SETUP / "gh-enable-push-protection-win.bat"
+        cmd = os.environ["COMSPEC"]
+        result = subprocess.run(
+            f'"{cmd}" /d /c ""{script}""',
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            encoding="utf-8", env=env, cwd=self.mock_dir, timeout=30
+        )
+        return result, log.read_text(encoding="utf-8-sig")
 
 
 if __name__ == "__main__":
