@@ -9,7 +9,8 @@ echo.
 
 
 rem "---------------------------------------------------"
-rem "目的: GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化し、"
+rem "目的: develop がある場合はデフォルトブランチと Dependabot 更新先を develop に変更する。"
+rem "      GitHub の RequiredCI Ruleset、Secret scanning、Push protection、Auto-merge 関連設定を有効化し、"
 rem "      Dependabot / Issue Template が使うラベルの作成と Private vulnerability reporting の有効化を行う。"
 rem "概要: テンプレートから作成したリポジトリには設定が引き継がれないため、"
 rem "      リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。"
@@ -24,13 +25,24 @@ if errorlevel 1 (
   exit /b 1
 )
 
+pushd "%~dp0.."
+if errorlevel 1 (
+  echo [エラー] スクリプトのリポジトリに移動できません。
+  pause
+  exit /b 1
+)
 set REPO=
 for /f "delims=" %%r in ('gh repo view --json nameWithOwner -q .nameWithOwner 2^>nul') do set REPO=%%r
+popd
 if not defined REPO (
   echo [エラー] リポジトリを特定できませんでした。GitHub リモートのあるリポジトリ内で実行してください。
   pause
   exit /b 1
 )
+
+set "SKIPPED_DEVELOP="
+call :configure_develop
+if errorlevel 1 exit /b 1
 
 rem ラベルは Dependabot と Issue Template が付与する。存在しないラベルは付与されないため事前に用意する
 call :ensure_label dependencies 0366d6 "Dependabot update"
@@ -76,12 +88,64 @@ if errorlevel 1 (
   echo [警告] Private vulnerability reporting の有効化に失敗しました。公開リポジトリ以外では利用できません。
 )
 
+if not defined SKIPPED_DEVELOP (
+  call :set_default_develop
+  if errorlevel 1 exit /b 1
+)
+
 echo [確認] 現在の設定:
-gh api "repos/%REPO%" --jq "{allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
+gh api "repos/%REPO%" --jq "{default_branch, allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
 gh api "repos/%REPO%/private-vulnerability-reporting" --jq "{private_vulnerability_reporting: .enabled}"
 
 echo.
+if defined SKIPPED_DEVELOP (
+  echo [未完了] develop がないため、デフォルトブランチと Dependabot 更新先の変更をスキップしました。
+  echo          他の設定は適用済みです。GitHub 上に develop を作成してから、このスクリプトを再実行してください。
+  pause
+  exit /b 1
+)
 pause
+exit /b 0
+
+
+:configure_develop
+set "DEVELOP_BRANCH="
+for /f "delims=" %%i in ('gh api "repos/%REPO%/branches?per_page=100" --paginate --jq "map(select(.name == \"develop\"))[0].name // empty" ^|^| echo __GH_ERROR__') do set "DEVELOP_BRANCH=%%i"
+if "%DEVELOP_BRANCH%"=="__GH_ERROR__" (
+  echo [エラー] ブランチ一覧の取得に失敗しました。認証・権限・通信状態を確認してください。
+  pause
+  exit /b 1
+)
+if not defined DEVELOP_BRANCH (
+  echo [エラー] GitHub 上に develop がありません。
+  echo [スキップ] デフォルトブランチと Dependabot 更新先は変更せず、他の設定を続行します。
+  set "SKIPPED_DEVELOP=1"
+  exit /b 0
+)
+if not "%DEVELOP_BRANCH%"=="develop" (
+  echo [エラー] develop の確認結果が不正なため、セットアップを中止します。
+  pause
+  exit /b 1
+)
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0set-dependabot-develop.ps1"
+if errorlevel 1 (
+  echo [エラー] Dependabot の更新先を変更できなかったため、セットアップを中止します。
+  pause
+  exit /b 1
+)
+echo [確認] Dependabot 設定はローカルの変更です。GitHub に反映するには commit と push が必要です。
+exit /b 0
+
+
+:set_default_develop
+echo [設定] %REPO% のデフォルトブランチを develop に変更します
+gh api -X PATCH "repos/%REPO%" -f "default_branch=develop" --silent
+if errorlevel 1 (
+  echo [エラー] デフォルトブランチの変更に失敗したため、セットアップを中止します。
+  echo          Dependabot 設定はローカルで変更済みです。他の GitHub 設定も適用済みのため、差分と GitHub の状態を確認してください。
+  pause
+  exit /b 1
+)
 exit /b 0
 
 
