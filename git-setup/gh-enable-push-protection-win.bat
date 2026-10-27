@@ -40,42 +40,21 @@ if errorlevel 1 exit /b 1
 call :ensure_label ai-reported 8a63d2 "Filed by an AI agent"
 if errorlevel 1 exit /b 1
 
-set RULESET_FILE=%~dp0gh-RequiredCI.json
-if not exist "%RULESET_FILE%" (
-  echo [エラー] Ruleset 定義が見つかりません: %RULESET_FILE%
+if not exist "%~dp0gh-RequiredCI.json" (
+  echo [エラー] Ruleset 定義が見つかりません: %~dp0gh-RequiredCI.json
+  pause
+  exit /b 1
+)
+if not exist "%~dp0gh-MainProtection.json" (
+  echo [エラー] Ruleset 定義が見つかりません: %~dp0gh-MainProtection.json
   pause
   exit /b 1
 )
 
-rem for /f 経由では ^| のキャレットが jq 式に混入し検出が失敗するため、一時ファイル経由で受け取る
-set RULESET_TMP=%TEMP%\gh-ruleset-id.tmp
-set RULESET_ID=
-gh api "repos/%REPO%/rulesets" --jq "[.[] | select(.name == \"RequiredCI\" and .source_type == \"Repository\")][0].id // empty" > "%RULESET_TMP%"
-if errorlevel 1 (
-  del "%RULESET_TMP%" > nul 2> nul
-  echo [エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。
-  pause
-  exit /b 1
-)
-set /p RULESET_ID=<"%RULESET_TMP%"
-del "%RULESET_TMP%" > nul 2> nul
-
-if defined RULESET_ID (
-  echo [設定] %REPO% の RequiredCI Ruleset を更新します
-  gh api -X PUT "repos/%REPO%/rulesets/%RULESET_ID%" --input "%RULESET_FILE%" --silent
-) else (
-  echo [設定] %REPO% に RequiredCI Ruleset を作成します
-  gh api -X POST "repos/%REPO%/rulesets" --input "%RULESET_FILE%" --silent
-)
-if errorlevel 1 (
-  echo [エラー] RequiredCI Ruleset の設定に失敗しました。リポジトリの管理者権限があるか確認してください。
-  pause
-  exit /b 1
-)
-gh api "repos/%REPO%/rulesets" --jq "[.[] | select(.name == \"RequiredCI\" and .source_type == \"Repository\")][0].id // empty" > "%RULESET_TMP%" 2> nul
-set RULESET_ID=
-set /p RULESET_ID=<"%RULESET_TMP%"
-del "%RULESET_TMP%" > nul 2> nul
+call :ensure_ruleset RequiredCI "%~dp0gh-RequiredCI.json"
+if errorlevel 1 exit /b 1
+call :ensure_ruleset MainProtection "%~dp0gh-MainProtection.json"
+if errorlevel 1 exit /b 1
 
 echo [設定] %REPO% の Secret scanning / Push protection / Auto-merge 関連設定を有効化します
 gh api -X PATCH "repos/%REPO%" --silent ^
@@ -99,11 +78,54 @@ if errorlevel 1 (
 
 echo [確認] 現在の設定:
 gh api "repos/%REPO%" --jq "{allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
-if defined RULESET_ID gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, enforcement, conditions, rules}"
 gh api "repos/%REPO%/private-vulnerability-reporting" --jq "{private_vulnerability_reporting: .enabled}"
 
 echo.
 pause
+exit /b 0
+
+
+:ensure_ruleset
+set "RULESET_NAME=%~1"
+set "RULESET_FILE=%~2"
+set "RULESET_ID="
+for /f "delims=" %%i in ('gh api "repos/%REPO%/rulesets?per_page=100" --paginate --jq "map(select(.name == \"%RULESET_NAME%\" and .source_type == \"Repository\"))[0].id // empty" ^|^| echo __GH_ERROR__') do set "RULESET_ID=%%i"
+if "%RULESET_ID%"=="__GH_ERROR__" (
+  echo [エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。
+  pause
+  exit /b 1
+)
+set "RULESET_EXISTING_ID=%RULESET_ID%"
+set "RULESET_ID="
+if defined RULESET_EXISTING_ID (
+  echo [設定] %REPO% の %RULESET_NAME% Ruleset を更新します
+  for /f "delims=" %%i in ('gh api -X PUT "repos/%REPO%/rulesets/%RULESET_EXISTING_ID%" --input "%RULESET_FILE%" --jq ".id" ^|^| echo __GH_ERROR__') do set "RULESET_ID=%%i"
+) else (
+  echo [設定] %REPO% に %RULESET_NAME% Ruleset を作成します
+  for /f "delims=" %%i in ('gh api -X POST "repos/%REPO%/rulesets" --input "%RULESET_FILE%" --jq ".id" ^|^| echo __GH_ERROR__') do set "RULESET_ID=%%i"
+)
+if "%RULESET_ID%"=="__GH_ERROR__" (
+  echo [エラー] %RULESET_NAME% Ruleset の設定に失敗しました。
+  pause
+  exit /b 1
+)
+if not defined RULESET_ID (
+  echo [エラー] %RULESET_NAME% Ruleset の ID を取得できませんでした。
+  pause
+  exit /b 1
+)
+if "%RULESET_ID%"=="null" (
+  echo [エラー] %RULESET_NAME% Ruleset の ID を取得できませんでした。
+  pause
+  exit /b 1
+)
+echo [確認] %RULESET_NAME% Ruleset:
+gh api "repos/%REPO%/rulesets/%RULESET_ID%" --jq "{name, enforcement, conditions, rules, bypass_actors}"
+if errorlevel 1 (
+  echo [エラー] %RULESET_NAME% Ruleset の確認に失敗しました。
+  pause
+  exit /b 1
+)
 exit /b 0
 
 
