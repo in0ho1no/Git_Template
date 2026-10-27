@@ -54,7 +54,11 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
 `gh-enable-push-protection-win.bat` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
 このスクリプトはあわせて GitHub の `allow_auto_merge` と `allow_squash_merge` も有効化するため、限定された更新 PR に対して auto-merge を使える前提も整う。
-テンプレート本体の Dependabot 更新先は `main` だが、この GitHub 初期設定スクリプトはリポジトリ名やブランチの有無にかかわらず、ローカルの `.github/dependabot.yml` の各 `target-branch` を `develop` に変更する。変更は自動で commit・push されないため、差分を確認して commit・push すること。派生先では別途 `develop` ブランチを用意する。再実行時も `develop` に統一し、既に一致している場合はファイルを書き換えない。設定ファイルがない場合、対象が欠けている場合、対応していない書式の場合はエラーを表示して GitHub 設定前に中断する。
+テンプレート本体の Dependabot 更新先は `main` だが、この GitHub 初期設定スクリプトは GitHub 上の `develop` の有無を確認し、存在する場合だけローカルの `.github/dependabot.yml` の各 `target-branch` と、GitHub 上のデフォルトブランチを `develop` に変更する。リポジトリ名による例外は設けない。ローカル設定を検証・変更してからデフォルトブランチを変更し、その後に他の GitHub 設定を行う。設定ファイルがない場合、対象が欠けている場合、対応していない書式の場合はエラーを表示して GitHub 設定前に中断する。
+
+デフォルトブランチの変更は直ちに GitHub に反映されるが、Dependabot 設定は自動で commit・push されない。差分を確認し、変更後のデフォルトブランチである `develop` に反映すること。再実行時も `develop` に統一し、ローカル設定が既に一致している場合はファイルを書き換えない。デフォルトブランチの変更に失敗した場合はエラー終了するが、Dependabot 設定のローカル変更は残るため、差分と GitHub の状態を確認すること。
+
+`develop` が存在しない場合はエラーとスキップ理由を表示し、デフォルトブランチと Dependabot 設定はどちらも変更しない。Ruleset・Push protection など他の設定は続行するが、最後に未完了事項を表示して終了コード 1 を返す。派生先では別途 GitHub 上に `develop` を用意してから再実行する。スクリプトはブランチを作成しない。ブランチ確認時の認証・権限・通信エラーは不在扱いにせず、その場でエラー終了する。
 `delete_branch_on_merge` も有効化するため、PR がマージされた head ブランチは自動削除される(未マージのブランチには影響しない。削除されたブランチは GitHub 上から復元可能)。
 このテンプレートでは [ .github/workflows/auto-merge-security-tool-updates.yml ](.github/workflows/auto-merge-security-tool-updates.yml) により、GitHub が付与する PR メタデータ上で `dependabot[bot]` が作成した PR であり、変更ファイルが `docker/semgrep/Dockerfile` または `docker/gitleaks/Dockerfile` のみである場合に限って auto-squash merge を予約する。
 ブランチ名、PR タイトル、ラベルのような偽装しやすい情報には依存していないため、通常の手作業 PR や他の Dependabot PR が誤って自動マージ対象になることは避けている。

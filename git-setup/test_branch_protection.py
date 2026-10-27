@@ -35,6 +35,25 @@ public class MockGh
         if (args[0] == "label" && args[1] == "create") return 0;
         if (args[0] != "api") return 1;
         if (args[1].Contains("/labels/")) return 1;
+        if (args[1].Contains("/branches?"))
+        {
+            string develop = Environment.GetEnvironmentVariable("MOCK_DEVELOP");
+            if (develop == "present" || develop == "partial-error")
+                Console.WriteLine("develop");
+            if (develop == "present" || develop == "absent") return 0;
+            Console.Error.WriteLine("Mock branch lookup failed: " + develop);
+            return 1;
+        }
+        if (command.Contains("<default_branch=develop>"))
+        {
+            if (Environment.GetEnvironmentVariable("MOCK_FAIL") == "default-branch")
+            {
+                Console.Error.WriteLine("Mock default branch update failed");
+                return 1;
+            }
+            Console.WriteLine("{}");
+            return 0;
+        }
 
         string stage;
         string name;
@@ -166,6 +185,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                 self.assertIn('select(.name == "RequiredCI"', calls)
                 self.assertIn('select(.name == "MainProtection"', calls)
                 self.assertIn("<-X> <PATCH> <repos/example/repo>", calls)
+                self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
                 self.assertNotIn("[エラー]", result.stdout + result.stderr)
 
     def test_windows_stops_on_ruleset_errors(self):
@@ -178,7 +198,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                         )
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn("[エラー]", result.stdout + result.stderr)
-                        self.assertNotIn("<-X> <PATCH>", calls)
+                        self.assertNotIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
                         if target == "RequiredCI":
                             self.assertNotIn("MainProtection", calls)
 
@@ -203,7 +223,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
         self.assertEqual(config.read_bytes(), expected)
         self.assertIn("already develop", second.stdout)
 
-    def test_windows_updates_local_config_before_github_operations(self):
+    def test_windows_configures_develop_before_other_settings(self):
         with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
             root = self.make_repo(Path(temporary))
             result, calls = self.run_windows(root=root)
@@ -212,8 +232,61 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             self.assertEqual(config.count('target-branch: "develop"'), 3)
             self.assertIn("commit", result.stdout)
             self.assertIn("push", result.stdout)
-            self.assertIn("<-X> <PATCH>", calls)
+            self.assertIn("<default_branch=develop>", calls)
+            self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+            self.assertLess(calls.index("<repos/example/repo/branches?per_page=100>"),
+                            calls.index("<default_branch=develop>"))
+            self.assertLess(calls.index("<default_branch=develop>"),
+                            calls.index("<repos/example/repo/labels/dependencies>"))
             self.assertIn(f"cwd={root}", calls)
+
+    def test_windows_skips_both_develop_changes_when_branch_is_absent(self):
+        for with_config in (True, False):
+            with self.subTest(with_config=with_config), tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+                root = self.make_repo(Path(temporary), with_config=with_config)
+                config = root / ".github" / "dependabot.yml"
+                original = config.read_bytes() if with_config else None
+                result, calls = self.run_windows(root=root, develop="absent")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("[スキップ]", result.stdout)
+                self.assertIn("[未完了]", result.stdout)
+                self.assertIn("再実行", result.stdout)
+                self.assertNotIn("<default_branch=develop>", calls)
+                self.assertNotIn("Dependabot 設定はローカルの変更です", result.stdout)
+                self.assertIn("gh-RequiredCI.json", calls)
+                self.assertIn("gh-MainProtection.json", calls)
+                self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+                self.assertIn("<repos/example/repo/private-vulnerability-reporting>", calls)
+                if with_config:
+                    self.assertEqual(config.read_bytes(), original)
+                else:
+                    self.assertFalse(config.exists())
+
+    def test_windows_stops_on_branch_lookup_errors(self):
+        for develop in ("auth-error", "permission-error", "network-error", "partial-error"):
+            with self.subTest(develop=develop), tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+                root = self.make_repo(Path(temporary))
+                config = root / ".github" / "dependabot.yml"
+                original = config.read_bytes()
+                result, calls = self.run_windows(root=root, develop=develop)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("[エラー]", result.stdout + result.stderr)
+                self.assertNotIn("[スキップ]", result.stdout)
+                self.assertNotIn("<default_branch=develop>", calls)
+                self.assertNotIn("<label>", calls)
+                self.assertNotIn("<-X>", calls)
+                self.assertEqual(config.read_bytes(), original)
+
+    def test_windows_stops_on_default_branch_update_error(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root, failure="default-branch")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("[エラー]", result.stdout + result.stderr)
+            self.assertIn("ローカルで変更済み", result.stdout)
+            self.assertIn("<default_branch=develop>", calls)
+            self.assertNotIn("<label>", calls)
+            self.assertNotIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
 
     def test_dependabot_invalid_input_stops_without_writing(self):
         for kind in ("missing-file", "missing-target", "duplicate", "unsupported"):
@@ -232,7 +305,9 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                 result, calls = self.run_windows(root=root)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("[エラー]", result.stdout + result.stderr)
-                self.assertNotIn("<api>", calls)
+                self.assertIn("<repos/example/repo/branches?per_page=100>", calls)
+                self.assertNotIn("<-X>", calls)
+                self.assertNotIn("<label>", calls)
                 if kind != "missing-file":
                     self.assertEqual(config.read_bytes(), data)
 
@@ -254,7 +329,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             capture_output=True, text=True, encoding="utf-8", timeout=30
         )
 
-    def run_windows(self, existing="0", failure="", target="RequiredCI", root=None):
+    def run_windows(self, existing="0", failure="", target="RequiredCI", root=None, develop="present"):
         if root is None:
             temporary = tempfile.TemporaryDirectory(prefix="branch protection repo ")
             self.addCleanup(temporary.cleanup)
@@ -264,6 +339,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(
             MOCK_EXISTING=existing, MOCK_FAIL=failure, MOCK_TARGET=target,
+            MOCK_DEVELOP=develop,
             MOCK_LOG=str(log), PATH=str(self.mock_dir) + os.pathsep + env["PATH"]
         )
         script = root / "git-setup" / "gh-enable-push-protection-win.bat"
