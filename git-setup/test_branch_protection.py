@@ -172,6 +172,14 @@ class WindowsBranchProtectionTests(unittest.TestCase):
         if result.returncode:
             raise RuntimeError(f"Could not build gh mock: {result.stderr!r}")
 
+    def test_batch_script_uses_utf8_and_crlf(self):
+        data = (SETUP / "gh-enable-push-protection-win.bat").read_bytes()
+        data.decode("utf-8")
+        self.assertNotIn(
+            b"\n", data.replace(b"\r\n", b""),
+            "Save gh-enable-push-protection-win.bat with CRLF line endings."
+        )
+
     def test_windows_creates_and_updates_both_rulesets(self):
         for existing, method in (("0", "POST"), ("1", "PUT")):
             with self.subTest(existing=existing):
@@ -264,7 +272,10 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                 original = config.read_bytes() if with_config else None
                 result, calls = self.run_windows(root=root, develop="absent")
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("[スキップ]", result.stdout)
+                self.assertIn(
+                    "[スキップ] デフォルトブランチと Dependabot 更新先は変更せず、他の設定を続行します。",
+                    result.stdout
+                )
                 self.assertIn("[未完了]", result.stdout)
                 self.assertIn("再実行", result.stdout)
                 self.assertNotIn("<default_branch=develop>", calls)
@@ -382,6 +393,11 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             f'"{cmd}" /d /c ""{script}""',
             stdin=subprocess.DEVNULL, capture_output=True, text=True,
             encoding="utf-8", env=env, cwd=self.mock_dir, timeout=30
+        )
+        self.assertNotIn("\ufffd", result.stdout + result.stderr)
+        self.assertNotIn(
+            "is not recognized as an internal or external command",
+            result.stderr
         )
         return result, log.read_text(encoding="utf-8-sig")
 
