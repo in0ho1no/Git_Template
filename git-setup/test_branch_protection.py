@@ -27,6 +27,8 @@ public class MockGh
         if (args.Length < 2) return 1;
         if (args[0] == "repo" && args[1] == "view")
         {
+            File.AppendAllText(Environment.GetEnvironmentVariable("MOCK_LOG"),
+                "cwd=" + Environment.CurrentDirectory + Environment.NewLine, Encoding.UTF8);
             Console.WriteLine("example/repo");
             return 0;
         }
@@ -101,12 +103,26 @@ class BranchProtectionTests(unittest.TestCase):
         })
         self.assertNotIn("pull_request", {rule["type"] for rule in develop["rules"]})
         workflow = (ROOT / ".github" / "workflows" / "security-scan.yml").read_text(encoding="utf-8")
-        for event, branches in (("push", ["develop"]), ("pull_request", ["develop", "main"])):
+        for event, branches in (("push", ["develop", "main"]), ("pull_request", ["develop", "main"])):
             section = re.search(rf"(?m)^  {event}:\n    branches:\n((?:      - .+\n)+)", workflow)
             self.assertIsNotNone(section)
             self.assertEqual(re.findall(r"(?m)^      - (.+)$", section.group(1)), branches)
         for check in ("semgrep", "gitleaks"):
             self.assertRegex(workflow, rf"(?m)^    name: {check}$")
+
+    def test_dependabot_and_auto_merge_targets(self):
+        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'(?m)^  - package-ecosystem:', config), [
+            "  - package-ecosystem:"
+        ] * 3)
+        self.assertEqual(re.findall(r'(?m)^    target-branch: "([^"]+)"$', config), [
+            "main", "main", "main"
+        ])
+        workflow = (ROOT / ".github" / "workflows" / "auto-merge-security-tool-updates.yml").read_text(encoding="utf-8")
+        self.assertIn("if: github.event.pull_request.base.ref == 'develop' || github.event.pull_request.base.ref == 'main'", workflow)
+        self.assertIn('docker/semgrep/Dockerfile|docker/gitleaks/Dockerfile)', workflow)
+        self.assertIn('"$PR_AUTHOR" != "dependabot[bot]"', workflow)
+        self.assertIn('"$PR_ACTOR" != "dependabot[bot]"', workflow)
 
 
 @unittest.skipUnless(os.name == "nt", "Windows is required for batch script tests")
@@ -166,7 +182,83 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                         if target == "RequiredCI":
                             self.assertNotIn("MainProtection", calls)
 
-    def run_windows(self, existing="0", failure="", target="RequiredCI"):
+    def test_dependabot_update_and_idempotence(self):
+        for bom, newline in ((b"", b"\n"), (b"\xef\xbb\xbf", b"\r\n")):
+            with self.subTest(bom=bom, newline=newline), tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+                self.check_dependabot_update(Path(temporary), bom, newline)
+
+    def check_dependabot_update(self, temporary, bom, newline):
+        root = self.make_repo(temporary)
+        config = root / ".github" / "dependabot.yml"
+        original = bom + config.read_bytes().replace(b"\n", newline).replace(
+            b'target-branch: "main"', b"target-branch: 'feature/test' # kept"
+        )
+        config.write_bytes(original)
+        first = self.run_updater(root)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        expected = original.replace(b"target-branch: 'feature/test'", b'target-branch: "develop"')
+        self.assertEqual(config.read_bytes(), expected)
+        second = self.run_updater(root)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertEqual(config.read_bytes(), expected)
+        self.assertIn("already develop", second.stdout)
+
+    def test_windows_updates_local_config_before_github_operations(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = (root / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+            self.assertEqual(config.count('target-branch: "develop"'), 3)
+            self.assertIn("commit", result.stdout)
+            self.assertIn("push", result.stdout)
+            self.assertIn("<-X> <PATCH>", calls)
+            self.assertIn(f"cwd={root}", calls)
+
+    def test_dependabot_invalid_input_stops_without_writing(self):
+        for kind in ("missing-file", "missing-target", "duplicate", "unsupported"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+                root = self.make_repo(Path(temporary), with_config=kind != "missing-file")
+                config = root / ".github" / "dependabot.yml"
+                if kind != "missing-file":
+                    data = config.read_bytes()
+                    if kind == "missing-target":
+                        data = data.replace(b'    target-branch: "main"\n', b"", 1)
+                    elif kind == "duplicate":
+                        data = data.replace(b'    target-branch: "main"\n', b'    target-branch: "main"\n    target-branch: "main"\n', 1)
+                    else:
+                        data = data.replace(b'target-branch: "main"', b'target-branch: [main, develop]', 1)
+                    config.write_bytes(data)
+                result, calls = self.run_windows(root=root)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("[エラー]", result.stdout + result.stderr)
+                self.assertNotIn("<api>", calls)
+                if kind != "missing-file":
+                    self.assertEqual(config.read_bytes(), data)
+
+    def make_repo(self, root, with_config=True):
+        setup = root / "git-setup"
+        setup.mkdir()
+        (root / ".github").mkdir()
+        for name in ("gh-enable-push-protection-win.bat", "set-dependabot-develop.ps1",
+                     "gh-RequiredCI.json", "gh-MainProtection.json"):
+            shutil.copyfile(SETUP / name, setup / name)
+        if with_config:
+            shutil.copyfile(ROOT / ".github" / "dependabot.yml", root / ".github" / "dependabot.yml")
+        return root
+
+    def run_updater(self, root):
+        return subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+             "-File", str(root / "git-setup" / "set-dependabot-develop.ps1")],
+            capture_output=True, text=True, encoding="utf-8", timeout=30
+        )
+
+    def run_windows(self, existing="0", failure="", target="RequiredCI", root=None):
+        if root is None:
+            temporary = tempfile.TemporaryDirectory(prefix="branch protection repo ")
+            self.addCleanup(temporary.cleanup)
+            root = self.make_repo(Path(temporary.name))
         log = self.mock_dir / "calls.log"
         log.write_text("", encoding="utf-8")
         env = os.environ.copy()
@@ -174,7 +266,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             MOCK_EXISTING=existing, MOCK_FAIL=failure, MOCK_TARGET=target,
             MOCK_LOG=str(log), PATH=str(self.mock_dir) + os.pathsep + env["PATH"]
         )
-        script = SETUP / "gh-enable-push-protection-win.bat"
+        script = root / "git-setup" / "gh-enable-push-protection-win.bat"
         cmd = os.environ["COMSPEC"]
         result = subprocess.run(
             f'"{cmd}" /d /c ""{script}""',

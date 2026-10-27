@@ -31,6 +31,7 @@ git-setup/
 ├── check-setup-win.bat   # Windows用Gitローカル設定が期待値どおりか確認するスクリプト
 ├── COMMIT_TEMPLATE   # コミットメッセージのテンプレート
 ├── gh-enable-push-protection-win.bat # Windows用 GitHub Ruleset / Push protection / Auto-merge 有効化スクリプト
+├── set-dependabot-develop.ps1        # Dependabot の更新先を develop に変更
 ├── gh-RequiredCI.json                # developブランチ用 Ruleset 定義
 ├── gh-MainProtection.json            # mainブランチ用 Ruleset 定義
 ├── hooks/            # commit-msg などの共通Git hooksを管理するディレクトリ
@@ -53,6 +54,7 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
 `gh-enable-push-protection-win.bat` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
 このスクリプトはあわせて GitHub の `allow_auto_merge` と `allow_squash_merge` も有効化するため、限定された更新 PR に対して auto-merge を使える前提も整う。
+テンプレート本体の Dependabot 更新先は `main` だが、この GitHub 初期設定スクリプトはリポジトリ名やブランチの有無にかかわらず、ローカルの `.github/dependabot.yml` の各 `target-branch` を `develop` に変更する。変更は自動で commit・push されないため、差分を確認して commit・push すること。派生先では別途 `develop` ブランチを用意する。再実行時も `develop` に統一し、既に一致している場合はファイルを書き換えない。設定ファイルがない場合、対象が欠けている場合、対応していない書式の場合はエラーを表示して GitHub 設定前に中断する。
 `delete_branch_on_merge` も有効化するため、PR がマージされた head ブランチは自動削除される(未マージのブランチには影響しない。削除されたブランチは GitHub 上から復元可能)。
 このテンプレートでは [ .github/workflows/auto-merge-security-tool-updates.yml ](.github/workflows/auto-merge-security-tool-updates.yml) により、GitHub が付与する PR メタデータ上で `dependabot[bot]` が作成した PR であり、変更ファイルが `docker/semgrep/Dockerfile` または `docker/gitleaks/Dockerfile` のみである場合に限って auto-squash merge を予約する。
 ブランチ名、PR タイトル、ラベルのような偽装しやすい情報には依存していないため、通常の手作業 PR や他の Dependabot PR が誤って自動マージ対象になることは避けている。
@@ -65,7 +67,7 @@ Private vulnerability reporting も有効化し、`.github/SECURITY.md` から�
 
 初期設定スクリプトは、既存の `develop` 向け `RequiredCI` とは別に、`main` 向けの `MainProtection` Ruleset を作成する。同名のリポジトリ Ruleset がある場合は定義ファイルの内容で更新するため、再実行時には手動変更も上書きされる。両 Ruleset の適用後にそれぞれ設定内容が表示される。
 
-`main` は PR 経由の変更が必要で、`semgrep` と `gitleaks` の成功をマージ条件とする。削除と force push も禁止する。`security-scan.yml` は `main` と `develop` 向けの PR で実行される。既存の `develop` 向け Dependabot 自動マージは変更しない。
+`main` は PR 経由の変更が必要で、`semgrep` と `gitleaks` の成功をマージ条件とする。削除と force push も禁止する。`security-scan.yml` は `main` と `develop` への push と、両ブランチ向けの PR で実行される。限定的な Dependabot 自動マージは両ブランチ向けの PR に適用される。
 
 個人開発を想定して承認の必須人数は 0 人、bypass は設定しない。したがって書き込み権限のない人は PR を作成できてもマージできないが、権限を持つ人による第三者レビューは強制されない。管理者も通常の push では保護を回避できず、緊急時に設定を変更できる人の管理が重要となる。必要に応じて承認人数や例外を定義ファイルで変更し、再適用する。既存の別 Ruleset や Organization のポリシーによって、さらに厳しい制限が適用される場合がある。
 
@@ -75,7 +77,7 @@ Push protection は push に含まれる機密情報の検出・流出防止を�
 
 定義と Windows 用スクリプトのモックテストは `python -B git-setup\test_branch_protection.py` で実行できる。Windows 用の実行テストでは、Windows PowerShell で生成した `gh.exe` モックを使い、両 Ruleset の作成・更新とエラー時の中断を検証する。GitHub への通信や設定変更は行わない。Windows 以外では実行テストをスキップし、定義のみ検証する。このテストは GitHub 上の設定や PR の実動作を確認するものではない。
 
-[Branch Protection Tests](../.github/workflows/branch-protection-tests.yml) は、テンプレート本体の `in0ho1no/Git_Template` だけでこのテストを自動実行する。`main` / `develop` 向けの PR と両ブランチへの push のうち、`git-setup/**`、この Workflow、`security-scan.yml`、`.gitattributes` のいずれかに変更があった場合が対象となる。GitHub Actions の画面から手動実行もできる。`windows-latest` に備わる Python と Windows PowerShell を使用し、テスト失敗時はチェックが失敗する。
+[Branch Protection Tests](../.github/workflows/branch-protection-tests.yml) は、テンプレート本体の `in0ho1no/Git_Template` だけでこのテストを自動実行する。`main` / `develop` 向けの PR と両ブランチへの push のうち、`git-setup/**`、この Workflow、`security-scan.yml`、`auto-merge-security-tool-updates.yml`、`dependabot.yml`、`.gitattributes` のいずれかに変更があった場合が対象となる。GitHub Actions の画面から手動実行もできる。`windows-latest` に備わる Python と Windows PowerShell を使用し、テスト失敗時はチェックが失敗する。
 
 派生リポジトリには Workflow ファイルもコピーされるが、リポジトリ名の条件でジョブをスキップするため、Windows runner でのテスト実行は発生しない。Ruleset の必須チェックには追加しないため、派生先でこのテストの成功を要求することはない。テンプレート本体のリポジトリ名を変更した場合は Workflow の条件も更新する。
 

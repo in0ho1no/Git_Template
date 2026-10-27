@@ -9,6 +9,8 @@ on:
       - 'git-setup/**'
       - '.github/workflows/branch-protection-tests.yml'
       - '.github/workflows/security-scan.yml'
+      - '.github/workflows/auto-merge-security-tool-updates.yml'
+      - '.github/dependabot.yml'
       - '.gitattributes'
   pull_request:
     branches:
@@ -18,6 +20,8 @@ on:
       - 'git-setup/**'
       - '.github/workflows/branch-protection-tests.yml'
       - '.github/workflows/security-scan.yml'
+      - '.github/workflows/auto-merge-security-tool-updates.yml'
+      - '.github/dependabot.yml'
       - '.gitattributes'
   workflow_dispatch:
 

@@ -24,13 +24,28 @@ if errorlevel 1 (
   exit /b 1
 )
 
+pushd "%~dp0.."
+if errorlevel 1 (
+  echo [エラー] スクリプトのリポジトリに移動できません。
+  pause
+  exit /b 1
+)
 set REPO=
 for /f "delims=" %%r in ('gh repo view --json nameWithOwner -q .nameWithOwner 2^>nul') do set REPO=%%r
+popd
 if not defined REPO (
   echo [エラー] リポジトリを特定できませんでした。GitHub リモートのあるリポジトリ内で実行してください。
   pause
   exit /b 1
 )
+
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0set-dependabot-develop.ps1"
+if errorlevel 1 (
+  echo [エラー] Dependabot の更新先を変更できなかったため、セットアップを中止します。
+  pause
+  exit /b 1
+)
+echo [確認] Dependabot 設定はローカルの変更です。GitHub に反映するには commit と push が必要です。
 
 rem ラベルは Dependabot と Issue Template が付与する。存在しないラベルは付与されないため事前に用意する
 call :ensure_label dependencies 0366d6 "Dependabot update"

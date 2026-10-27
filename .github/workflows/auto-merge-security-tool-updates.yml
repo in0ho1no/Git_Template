@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   enable-auto-merge:
-    if: github.event.pull_request.base.ref == 'develop'
+    if: github.event.pull_request.base.ref == 'develop' || github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Check eligibility
