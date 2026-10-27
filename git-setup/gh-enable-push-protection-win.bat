@@ -88,6 +88,11 @@ if errorlevel 1 (
   echo [警告] Private vulnerability reporting の有効化に失敗しました。公開リポジトリ以外では利用できません。
 )
 
+if not defined SKIPPED_DEVELOP (
+  call :set_default_develop
+  if errorlevel 1 exit /b 1
+)
+
 echo [確認] 現在の設定:
 gh api "repos/%REPO%" --jq "{default_branch, allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}"
 gh api "repos/%REPO%/private-vulnerability-reporting" --jq "{private_vulnerability_reporting: .enabled}"
@@ -129,11 +134,15 @@ if errorlevel 1 (
   exit /b 1
 )
 echo [確認] Dependabot 設定はローカルの変更です。GitHub に反映するには commit と push が必要です。
+exit /b 0
+
+
+:set_default_develop
 echo [設定] %REPO% のデフォルトブランチを develop に変更します
 gh api -X PATCH "repos/%REPO%" -f "default_branch=develop" --silent
 if errorlevel 1 (
   echo [エラー] デフォルトブランチの変更に失敗したため、セットアップを中止します。
-  echo          Dependabot 設定はローカルで変更済みです。設定は未完了のため、差分と GitHub の状態を確認してください。
+  echo          Dependabot 設定はローカルで変更済みです。他の GitHub 設定も適用済みのため、差分と GitHub の状態を確認してください。
   pause
   exit /b 1
 )

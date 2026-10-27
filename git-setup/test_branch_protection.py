@@ -32,7 +32,8 @@ public class MockGh
             Console.WriteLine("example/repo");
             return 0;
         }
-        if (args[0] == "label" && args[1] == "create") return 0;
+        if (args[0] == "label" && args[1] == "create")
+            return Environment.GetEnvironmentVariable("MOCK_FAIL") == "label" ? 1 : 0;
         if (args[0] != "api") return 1;
         if (args[1].Contains("/labels/")) return 1;
         if (args[1].Contains("/branches?"))
@@ -54,6 +55,9 @@ public class MockGh
             Console.WriteLine("{}");
             return 0;
         }
+        if (command.Contains("<security_and_analysis[secret_scanning][status]=enabled>")
+            && Environment.GetEnvironmentVariable("MOCK_FAIL") == "security-settings")
+            return 1;
 
         string stage;
         string name;
@@ -199,6 +203,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn("[エラー]", result.stdout + result.stderr)
                         self.assertNotIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+                        self.assertNotIn("<default_branch=develop>", calls)
                         if target == "RequiredCI":
                             self.assertNotIn("MainProtection", calls)
 
@@ -223,7 +228,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
         self.assertEqual(config.read_bytes(), expected)
         self.assertIn("already develop", second.stdout)
 
-    def test_windows_configures_develop_before_other_settings(self):
+    def test_windows_configures_develop_after_required_settings(self):
         with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
             root = self.make_repo(Path(temporary))
             result, calls = self.run_windows(root=root)
@@ -236,8 +241,14 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
             self.assertLess(calls.index("<repos/example/repo/branches?per_page=100>"),
                             calls.index("<default_branch=develop>"))
-            self.assertLess(calls.index("<default_branch=develop>"),
-                            calls.index("<repos/example/repo/labels/dependencies>"))
+            self.assertLess(calls.index("<repos/example/repo/labels/dependencies>"),
+                            calls.index("<default_branch=develop>"))
+            self.assertLess(calls.index("<repos/example/repo/rulesets/101>"),
+                            calls.index("<default_branch=develop>"))
+            self.assertLess(calls.index("<repos/example/repo/rulesets/102>"),
+                            calls.index("<default_branch=develop>"))
+            self.assertLess(calls.index("<security_and_analysis[secret_scanning][status]=enabled>"),
+                            calls.index("<default_branch=develop>"))
             self.assertIn(f"cwd={root}", calls)
 
     def test_windows_skips_both_develop_changes_when_branch_is_absent(self):
@@ -285,8 +296,26 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             self.assertIn("[エラー]", result.stdout + result.stderr)
             self.assertIn("ローカルで変更済み", result.stdout)
             self.assertIn("<default_branch=develop>", calls)
-            self.assertNotIn("<label>", calls)
-            self.assertNotIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+            self.assertIn("<label>", calls)
+            self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+
+    def test_windows_does_not_change_default_when_security_settings_fail(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root, failure="security-settings")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("[エラー]", result.stdout + result.stderr)
+            self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
+            self.assertNotIn("<default_branch=develop>", calls)
+
+    def test_windows_does_not_change_default_when_label_creation_fails(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root, failure="label")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("[エラー]", result.stdout + result.stderr)
+            self.assertIn("<label> <create>", calls)
+            self.assertNotIn("<default_branch=develop>", calls)
 
     def test_dependabot_invalid_input_stops_without_writing(self):
         for kind in ("missing-file", "missing-target", "duplicate", "unsupported"):
