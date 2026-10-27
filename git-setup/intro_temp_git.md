@@ -41,6 +41,7 @@ git-setup/
 ├── gh-enable-push-protection-win.bat # Windows用 GitHub Ruleset / Push protection / Auto-merge 有効化スクリプト
 ├── gh-enable-push-protection-mac.sh  # Mac用 GitHub Ruleset / Push protection / Auto-merge 有効化スクリプト
 ├── gh-RequiredCI.json                # developブランチ用 Ruleset 定義
+├── gh-MainProtection.json            # mainブランチ用 Ruleset 定義
 ├── hooks/            # commit-msg などの共通Git hooksを管理するディレクトリ
 ├── setup-win.bat     # Windows用セットアップスクリプト
 └── setup-mac.sh      # Mac用セットアップスクリプト
@@ -69,6 +70,20 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 また、auto-merge 予約後に条件を満たさない変更が push された場合は、同ワークフローが予約済みの auto-merge を解除する。
 あわせて `dependencies`(Dependabot 用)、`task`(Issue Template の Task 用)、`ai-reported`(AI が起票した Issue 用) ラベルも扱う。既に存在する場合は y/n で確認してから色と説明を上書きするため、不要な上書きを避けられる。
 Private vulnerability reporting も有効化し、`.github/SECURITY.md` から案内する非公開の脆弱性報告窓口を用意する(公開リポジトリのみ。非公開リポジトリでは警告を表示して続行する)。
+
+#### main の保護と確認
+
+初期設定スクリプトは、既存の `develop` 向け `RequiredCI` とは別に、`main` 向けの `MainProtection` Ruleset を作成する。同名のリポジトリ Ruleset がある場合は定義ファイルの内容で更新するため、再実行時には手動変更も上書きされる。両 Ruleset の適用後にそれぞれ設定内容が表示される。
+
+`main` は PR 経由の変更が必要で、`semgrep` と `gitleaks` の成功をマージ条件とする。削除と force push も禁止する。`security-scan.yml` は `main` と `develop` 向けの PR で実行される。既存の `develop` 向け Dependabot 自動マージは変更しない。
+
+個人開発を想定して承認の必須人数は 0 人、bypass は設定しない。したがって書き込み権限のない人は PR を作成できてもマージできないが、権限を持つ人による第三者レビューは強制されない。管理者も通常の push では保護を回避できず、緊急時に設定を変更できる人の管理が重要となる。必要に応じて承認人数や例外を定義ファイルで変更し、再適用する。既存の別 Ruleset や Organization のポリシーによって、さらに厳しい制限が適用される場合がある。
+
+Push protection は push に含まれる機密情報の検出・流出防止を目的とする。一方、Ruleset はブランチへの変更方法やマージ条件を制御するもので、両者は別の設定である。Ruleset やセキュリティ機能の利用可否は GitHub のプランやリポジトリの公開設定に依存する。
+
+設定後は GitHub の **Settings → Rules → Rulesets** で両 Ruleset の対象、ルール、bypass を確認する。`main` 向けの検証用 PR で両チェックが実行されること、チェック失敗時にマージがブロックされることを確認し、再度スクリプトを実行しても重複せず設定が維持されることを確認する。別の Ruleset の影響も含めた有効なルールは、GitHub の対象ブランチのルール画面でも確認する。実際に保護されるまで直接 push を避ける。
+
+定義と Mac 用スクリプトのモックテストは `python -B git-setup/test_branch_protection.py` で実行できる。このテストは GitHub 上の設定や PR の実動作を確認するものではない。
 
 ※ `-m` オプションを使用するとテンプレートは表示されない。
 ※ ユーザのコメントを上書することはしない。一度クリアしたり、何か入力されていたリするときは表示されない。

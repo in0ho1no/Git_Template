@@ -66,36 +66,49 @@ ensure_label task c5def5 "Work without behavior change"
 ensure_label ai-reported 8a63d2 "Filed by an AI agent"
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-ruleset_file="$script_dir/gh-RequiredCI.json"
-if [ ! -f "$ruleset_file" ]; then
-  echo "[エラー] Ruleset 定義が見つかりません: $ruleset_file" >&2
-  exit 1
-fi
+for ruleset_file in "$script_dir/gh-RequiredCI.json" "$script_dir/gh-MainProtection.json"; do
+  if [ ! -f "$ruleset_file" ]; then
+    echo "[エラー] Ruleset 定義が見つかりません: $ruleset_file" >&2
+    exit 1
+  fi
+done
 
-# 一覧取得の失敗を握りつぶすと POST に進んで重複作成/422 になるため、ここで明示的に止める
-if ! ruleset_id=$(gh api "repos/$repo/rulesets" \
-  --jq '[.[] | select(.name == "RequiredCI" and .source_type == "Repository")][0].id // empty'); then
-  echo "[エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
-  exit 1
-fi
+ensure_ruleset() {
+  ruleset_name=$1
+  ruleset_file=$2
+  if ! ruleset_id=$(gh api "repos/$repo/rulesets?per_page=100" --paginate \
+    --jq "map(select(.name == \"$ruleset_name\" and .source_type == \"Repository\"))[0].id // empty"); then
+    echo "[エラー] Ruleset 一覧の取得に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
+    exit 1
+  fi
 
-if [ -n "$ruleset_id" ]; then
-  echo "[設定] $repo の RequiredCI Ruleset を更新します"
-  ruleset_endpoint="repos/$repo/rulesets/$ruleset_id"
-  ruleset_method=PUT
-else
-  echo "[設定] $repo に RequiredCI Ruleset を作成します"
-  ruleset_endpoint="repos/$repo/rulesets"
-  ruleset_method=POST
-fi
+  if [ -n "$ruleset_id" ]; then
+    echo "[設定] $repo の $ruleset_name Ruleset を更新します"
+    ruleset_endpoint="repos/$repo/rulesets/$ruleset_id"
+    ruleset_method=PUT
+  else
+    echo "[設定] $repo に $ruleset_name Ruleset を作成します"
+    ruleset_endpoint="repos/$repo/rulesets"
+    ruleset_method=POST
+  fi
 
-if ! gh api -X "$ruleset_method" "$ruleset_endpoint" --input "$ruleset_file" --silent; then
-  echo "[エラー] RequiredCI Ruleset の設定に失敗しました。リポジトリの管理者権限があるか確認してください。" >&2
-  exit 1
-fi
-ruleset_id=$(gh api "repos/$repo/rulesets" \
-  --jq '[.[] | select(.name == "RequiredCI" and .source_type == "Repository")][0].id // empty' \
-  2>/dev/null || true)
+  if ! ruleset_id=$(gh api -X "$ruleset_method" "$ruleset_endpoint" --input "$ruleset_file" --jq '.id'); then
+    echo "[エラー] $ruleset_name Ruleset の設定に失敗しました。" >&2
+    exit 1
+  fi
+  if [ -z "$ruleset_id" ] || [ "$ruleset_id" = "null" ]; then
+    echo "[エラー] $ruleset_name Ruleset の ID を取得できませんでした。" >&2
+    exit 1
+  fi
+  echo "[確認] $ruleset_name Ruleset:"
+  if ! gh api "repos/$repo/rulesets/$ruleset_id" --jq '{name, enforcement, conditions, rules, bypass_actors}'; then
+    echo "[エラー] $ruleset_name Ruleset の確認に失敗しました。" >&2
+    exit 1
+  fi
+}
+
+ensure_ruleset RequiredCI "$script_dir/gh-RequiredCI.json"
+ensure_ruleset MainProtection "$script_dir/gh-MainProtection.json"
 
 echo "[設定] $repo の Secret scanning / Push protection / Auto-merge 関連設定を有効化します"
 if ! gh api -X PATCH "repos/$repo" --silent \
@@ -117,7 +130,4 @@ fi
 
 echo "[確認] 現在の設定:"
 gh api "repos/$repo" --jq '{allow_auto_merge, allow_squash_merge, delete_branch_on_merge, security_and_analysis: .security_and_analysis | {secret_scanning, secret_scanning_push_protection}}'
-if [ -n "$ruleset_id" ]; then
-  gh api "repos/$repo/rulesets/$ruleset_id" --jq '{name, enforcement, conditions, rules}'
-fi
 gh api "repos/$repo/private-vulnerability-reporting" --jq '{private_vulnerability_reporting: .enabled}'
