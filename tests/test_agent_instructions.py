@@ -15,6 +15,19 @@ class AgentInstructionsTest(unittest.TestCase):
                 self.assertIn(heading, shared)
         self.assertNotIn("Fable5などのフロンティアモデル利用時の注意", shared)
 
+    def test_shared_rules_define_task_document_usage(self):
+        shared = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        for rule in (
+            "## タスク文書の使い分け",
+            "これらのファイルを使うかどうかはセッション数では決めない。",
+            "`task.md` には実行する作業だけを記述し",
+            "`spec.md` には仕様だけを記述する。",
+            "`records.md` は空の状態から始め",
+            "単なる作業ログは記録しない。",
+        ):
+            with self.subTest(rule=rule):
+                self.assertIn(rule, shared)
+
     def test_claude_import_resolves_to_shared_rules(self):
         entry = (ROOT / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
         imports = [line.strip()[1:] for line in entry.splitlines()
