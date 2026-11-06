@@ -1,1 +1,1 @@
-FROM semgrep/semgrep:1.182.1
+FROM semgrep/semgrep:1.183.0
