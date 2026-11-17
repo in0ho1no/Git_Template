@@ -55,9 +55,21 @@ public class MockGh
             Console.WriteLine("{}");
             return 0;
         }
-        if (command.Contains("<security_and_analysis[secret_scanning][status]=enabled>")
-            && Environment.GetEnvironmentVariable("MOCK_FAIL") == "security-settings")
-            return 1;
+        if (command.Contains("<security_and_analysis[secret_scanning][status]=enabled>"))
+        {
+            string securityFailure = Environment.GetEnvironmentVariable("MOCK_FAIL");
+            if (securityFailure == "security-settings") return 1;
+            if (securityFailure == "secret-plan")
+            {
+                Console.Error.WriteLine("gh: Upgrade to GitHub Pro or make this repository public. (HTTP 403)");
+                return 1;
+            }
+            if (securityFailure == "secret-permission")
+            {
+                Console.Error.WriteLine("gh: Resource not accessible by integration (HTTP 403)");
+                return 1;
+            }
+        }
 
         string stage;
         string name;
@@ -330,6 +342,38 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             self.assertIn("<security_and_analysis[secret_scanning][status]=enabled>", calls)
             self.assertNotIn("<default_branch=develop>", calls)
 
+    def test_windows_continues_only_when_secret_protection_is_plan_limited(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root, failure="secret-plan")
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            self.assertIn("[スキップ] Secret scanning / Push protection", output)
+            self.assertNotIn("[エラー]", output)
+            self.assertIn("<allow_auto_merge=true>", calls)
+            self.assertIn("<default_branch=develop>", calls)
+
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, calls = self.run_windows(root=root, failure="secret-permission")
+            output = result.stdout + result.stderr
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("[エラー]", output)
+            self.assertIn("Resource not accessible by integration", output)
+            self.assertNotIn("<allow_auto_merge=true>", calls)
+            self.assertNotIn("<default_branch=develop>", calls)
+
+    def test_windows_ignores_inherited_skip_flags(self):
+        with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
+            root = self.make_repo(Path(temporary))
+            result, _ = self.run_windows(root=root, extra_env={
+                "SKIPPED_SECRET_PROTECTION": "1",
+                "SKIPPED_PRIVATE_VULNERABILITY_REPORTING": "1",
+            })
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("[完了] Secret scanning / Push protection", result.stdout)
+            self.assertIn("[完了] Private vulnerability reporting", result.stdout)
+
     def test_windows_does_not_change_default_when_label_creation_fails(self):
         with tempfile.TemporaryDirectory(prefix="dependabot setup ") as temporary:
             root = self.make_repo(Path(temporary))
@@ -380,7 +424,8 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             capture_output=True, text=True, encoding="utf-8", timeout=30
         )
 
-    def run_windows(self, existing="0", failure="", target="RequiredCI", root=None, develop="present"):
+    def run_windows(self, existing="0", failure="", target="RequiredCI", root=None, develop="present",
+                    extra_env=None):
         if root is None:
             temporary = tempfile.TemporaryDirectory(prefix="branch protection repo ")
             self.addCleanup(temporary.cleanup)
@@ -393,6 +438,7 @@ class WindowsBranchProtectionTests(unittest.TestCase):
             MOCK_DEVELOP=develop,
             MOCK_LOG=str(log), PATH=str(self.mock_dir) + os.pathsep + env["PATH"]
         )
+        env.update(extra_env or {})
         script = root / "git-setup" / "gh-enable-push-protection-win.bat"
         cmd = os.environ["COMSPEC"]
         result = subprocess.run(

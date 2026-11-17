@@ -52,7 +52,7 @@ Git hooks を追加・変更する場合は `git-setup/hooks` を編集する。
 セキュリティ検査は GitHub Actions 上の `security-scan.yml` で Semgrep / gitleaks を実行する。
 シークレットの流出防止には、リポジトリ側で GitHub の Secret scanning / Push protection を有効化することを推奨する。
 テンプレートから作成したリポジトリには設定が引き継がれないため、リポジトリ作成後に
-`gh-enable-push-protection-win.bat` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。
+`gh-enable-push-protection-win.bat` を実行して有効化する(gh CLI と管理者権限が必要)。同名の RequiredCI Ruleset が存在する場合は更新される。プライベートリポジトリで Secret Protection のプラン制限により Secret scanning / Push protection を有効化できない場合は、その項目をスキップして他の設定を続行し、最後に結果を表示する。プラン制限以外のエラーは中断する。
 このスクリプトはあわせて GitHub の `allow_auto_merge` と `allow_squash_merge` も有効化するため、限定された更新 PR に対して auto-merge を使える前提も整う。
 テンプレート本体の Dependabot 更新先は `main` だが、この GitHub 初期設定スクリプトは GitHub 上の `develop` の有無を確認し、存在する場合だけローカルの `.github/dependabot.yml` の各 `target-branch` と、GitHub 上のデフォルトブランチを `develop` に変更する。リポジトリ名による例外は設けない。ローカル設定を検証・変更した後、Ruleset と必須の GitHub 設定を適用してからデフォルトブランチを変更する。途中で必須設定に失敗した場合、デフォルトブランチは変更しないが、ローカル設定など適用済みの変更は残る。設定ファイルがない場合、対象が欠けている場合、対応していない書式の場合はエラーを表示して GitHub 設定前に中断する。
 

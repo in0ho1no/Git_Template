@@ -14,7 +14,8 @@ rem "      GitHub の RequiredCI Ruleset、Secret scanning、Push protection、A
 rem "      Dependabot / Issue Template が使うラベルの作成と Private vulnerability reporting の有効化を行う。"
 rem "概要: テンプレートから作成したリポジトリには設定が引き継がれないため、"
 rem "      リポジトリ作成後に一度実行する。gh CLI と管理者権限が必要。"
-rem "補足: プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要。"
+rem "補足: プライベートリポジトリでは GitHub Secret Protection を利用できるプランが必要。"
+rem "      プラン制限で Secret scanning / Push protection を有効化できない場合も、他の設定を続行する。"
 rem "      Private vulnerability reporting は公開リポジトリのみ対応のため、失敗しても中断せず警告に留める。"
 rem "日本語は UTF-8 コンソールで直接 echo せず、引用符内のデータとして渡す。"
 rem "---------------------------------------------------"
@@ -42,6 +43,8 @@ if not defined REPO (
 )
 
 set "SKIPPED_DEVELOP="
+set "SKIPPED_SECRET_PROTECTION="
+set "SKIPPED_PRIVATE_VULNERABILITY_REPORTING="
 call :configure_develop
 if errorlevel 1 exit /b 1
 
@@ -69,16 +72,16 @@ if errorlevel 1 exit /b 1
 call :ensure_ruleset MainProtection "%~dp0gh-MainProtection.json"
 if errorlevel 1 exit /b 1
 
-for %%M in ("[設定] %REPO% の Secret scanning / Push protection / Auto-merge 関連設定を有効化します") do echo(%%~M
+call :configure_secret_protection
+if errorlevel 1 exit /b 1
+
+for %%M in ("[設定] %REPO% の Auto-merge 関連設定を有効化します") do echo(%%~M
 gh api -X PATCH "repos/%REPO%" --silent ^
-  -f "security_and_analysis[secret_scanning][status]=enabled" ^
-  -f "security_and_analysis[secret_scanning_push_protection][status]=enabled" ^
   -f "allow_auto_merge=true" ^
   -f "allow_squash_merge=true" ^
   -f "delete_branch_on_merge=true"
 if errorlevel 1 (
-  for %%M in ("[エラー] 有効化に失敗しました。リポジトリの管理者権限があるか確認してください。") do echo(%%~M
-  for %%M in ("         プライベートリポジトリでは GitHub Advanced Security (Secret Protection) の契約が必要です。") do echo(%%~M
+  for %%M in ("[エラー] Auto-merge 関連設定の有効化に失敗しました。リポジトリの管理者権限があるか確認してください。") do echo(%%~M
   pause
   exit /b 1
 )
@@ -86,7 +89,9 @@ if errorlevel 1 (
 for %%M in ("[設定] %REPO% の Private vulnerability reporting を有効化します") do echo(%%~M
 gh api -X PUT "repos/%REPO%/private-vulnerability-reporting" --silent
 if errorlevel 1 (
+  set "SKIPPED_PRIVATE_VULNERABILITY_REPORTING=1"
   for %%M in ("[警告] Private vulnerability reporting の有効化に失敗しました。公開リポジトリ以外では利用できません。") do echo(%%~M
+  for %%M in ("         GitHub 上でリポジトリの公開設定を確認してください。") do echo(%%~M
 )
 
 if not defined SKIPPED_DEVELOP (
@@ -99,13 +104,73 @@ gh api "repos/%REPO%" --jq "{default_branch, allow_auto_merge, allow_squash_merg
 gh api "repos/%REPO%/private-vulnerability-reporting" --jq "{private_vulnerability_reporting: .enabled}"
 
 echo.
+for %%M in ("[結果]") do echo(%%~M
+for %%M in ("[完了] Rulesets、ラベル、Auto-merge 関連設定") do echo(%%~M
+if defined SKIPPED_SECRET_PROTECTION (
+  for %%M in ("[スキップ] Secret scanning / Push protection (プラン制限により利用不可)") do echo(%%~M
+) else (
+  for %%M in ("[完了] Secret scanning / Push protection") do echo(%%~M
+)
+if defined SKIPPED_PRIVATE_VULNERABILITY_REPORTING (
+  for %%M in ("[スキップ] Private vulnerability reporting") do echo(%%~M
+) else (
+  for %%M in ("[完了] Private vulnerability reporting") do echo(%%~M
+)
 if defined SKIPPED_DEVELOP (
   for %%M in ("[未完了] develop がないため、デフォルトブランチと Dependabot 更新先の変更をスキップしました。") do echo(%%~M
   for %%M in ("         他の設定は適用済みです。GitHub 上に develop を作成してから、このスクリプトを再実行してください。") do echo(%%~M
   pause
   exit /b 1
 )
+for %%M in ("[完了] develop をデフォルトブランチおよび Dependabot 更新先に設定") do echo(%%~M
 pause
+exit /b 0
+
+
+rem 終了コードではプラン制限の 403 と他のエラーを区別できないため、gh のエラー出力を行単位で判定する
+
+:configure_secret_protection
+set "SECRET_PROTECTION_FAILED="
+set "SECRET_PROTECTION_PLAN_LIMITED="
+set "SECRET_PROTECTION_HTTP_403="
+for %%M in ("[設定] %REPO% の Secret scanning / Push protection を有効化します") do echo(%%~M
+for /f "delims=" %%L in ('gh api -X PATCH "repos/%REPO%" --silent -f "security_and_analysis[secret_scanning][status]=enabled" -f "security_and_analysis[secret_scanning_push_protection][status]=enabled" 2^>^&1 ^|^| echo __GH_ERROR__') do (
+  set "SECRET_PROTECTION_LINE=%%L"
+  call :inspect_secret_protection_line
+)
+if not defined SECRET_PROTECTION_FAILED exit /b 0
+if defined SECRET_PROTECTION_PLAN_LIMITED if defined SECRET_PROTECTION_HTTP_403 (
+  set "SKIPPED_SECRET_PROTECTION=1"
+  for %%M in ("[警告] このリポジトリでは Secret scanning / Push protection を有効化できませんでした。") do echo(%%~M
+  for %%M in ("         Secret Protection を利用できるプランを確認してください。") do echo(%%~M
+  for %%M in ("         リポジトリを公開する場合は、公開してよいことを確認した場合に限り変更してください。") do echo(%%~M
+  exit /b 0
+)
+for %%M in ("[エラー] Secret scanning / Push protection の有効化に失敗しました。") do echo(%%~M
+for %%M in ("         プラン制限以外の GitHub CLI エラーです。上記の出力を確認してください。") do echo(%%~M
+pause
+exit /b 1
+
+
+rem 行に引用符や記号が含まれても構文が崩れないよう、遅延展開で比較する
+
+:inspect_secret_protection_line
+setlocal EnableDelayedExpansion
+set "IS_ERROR_MARKER="
+set "HAS_PLAN_MESSAGE="
+set "HAS_HTTP_403="
+if "!SECRET_PROTECTION_LINE!"=="__GH_ERROR__" (
+  set "IS_ERROR_MARKER=1"
+) else (
+  echo(!SECRET_PROTECTION_LINE!
+  if not "!SECRET_PROTECTION_LINE:Upgrade to GitHub Pro or make this repository public=!"=="!SECRET_PROTECTION_LINE!" set "HAS_PLAN_MESSAGE=1"
+  if not "!SECRET_PROTECTION_LINE:HTTP 403=!"=="!SECRET_PROTECTION_LINE!" set "HAS_HTTP_403=1"
+)
+endlocal & (
+  if "%IS_ERROR_MARKER%"=="1" set "SECRET_PROTECTION_FAILED=1"
+  if "%HAS_PLAN_MESSAGE%"=="1" set "SECRET_PROTECTION_PLAN_LIMITED=1"
+  if "%HAS_HTTP_403%"=="1" set "SECRET_PROTECTION_HTTP_403=1"
+)
 exit /b 0
 
 
